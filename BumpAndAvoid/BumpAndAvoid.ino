@@ -11,6 +11,65 @@ AF_DCMotor rMotor(1, MOTOR12_1KHZ);  //right motor is on port 1, left on port 2
 AF_DCMotor lMotor(2, MOTOR12_1KHZ);
 SoftwareSerial screen = SoftwareSerial(LCDRx, LCDTx);  //got screen?
 
+
+void driveForward(uint8_t speed = 255)
+{
+	rMotor.setSpeed(speed);
+    lMotor.setSpeed(speed);
+	
+	rMotor.run(FORWARD);
+    lMotor.run(FORWARD);
+}
+
+
+void driveBackward(uint8_t speed = 255)
+{
+	rMotor.setSpeed(speed);
+    lMotor.setSpeed(speed);
+	
+	rMotor.run(BACKWARD);
+    lMotor.run(BACKWARD);
+}
+
+
+void brake()
+{
+	rMotor.setSpeed(0);
+    lMotor.setSpeed(0);
+}
+
+
+void coast()
+{
+	rMotor.run(RELEASE);
+    lMotor.run(RELEASE);
+}
+
+
+void turnDegrees(int degrees, uint8_t speed = 255) // CCW is positive
+{
+	rMotor.setSpeed(speed);
+    lMotor.setSpeed(speed);
+	
+	if (degrees > 0)
+	{
+		rMotor.run(BACKWARD);
+        lMotor.run(FORWARD);
+	}
+	else
+	{
+		rMotor.run(FORWARD);
+        lMotor.run(BACKWARD);
+	}
+	
+	delay(10 * degrees);
+	
+	brake();
+	
+	delay(50);
+}
+
+
 void setup()
 {
   pinMode(lBump, INPUT);  //switches are inputs, LCD is an output
@@ -45,7 +104,7 @@ void setup()
 
 void loop()
 {
-  screen.print("?x00?y0");
+  screen.print("?f?x00?y0");
   screen.print("Rolling         ");
   
   rMotor.run(FORWARD);
@@ -59,9 +118,8 @@ void loop()
   
   if (leftHit)  //if the left switch is hit
   {
-    screen.print("?x00?y0");
-    screen.print("LEFT            ");
-    lMotor.run(BACKWARD);
+    screen.print("?x00?y0LEFT");
+    lMotor.run(BACKWARD);|
     rMotor.run(BACKWARD);  //backup for 300ms
     delay(1500);
     lMotor.run(RELEASE);  //stahp
@@ -72,7 +130,7 @@ void loop()
   }
   else
   {
-    screen.print("?x00?y0");
+    screen.print(?"?x00?y0");
     screen.print("RIGHT            ");
     lMotor.run(BACKWARD);
     rMotor.run(BACKWARD);
