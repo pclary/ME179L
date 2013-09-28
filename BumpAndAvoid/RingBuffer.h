@@ -2,14 +2,14 @@
 #define RINGBUFFER_H
 
 
-template <typename T, int capacity>
+template <typename T, int _capacity>
 class RingBuffer 
 {
 public:
     RingBuffer() 
     {
         headIndex = 0;
-        size = 0;
+        _size = 0;
     }
     T& operator[](int index);
     T read(int index);
@@ -18,20 +18,20 @@ public:
     T pop();
     int size()
     {
-        return size;
+        return _size;
     }
     int capacity()
     {
-        return capacity;
+        return _capacity;
     }
 
 private:
-    T data[capacity];
+    T data[_capacity];
     int headIndex;
-    int size;
-    inline int getRealIndex(int i)
+    int _size;
+    inline int getRealIndex(int index)
     {
-        return ((headIndex - index) % capacity + capacity) % capacity;
+        return ((headIndex - index) % _capacity + _capacity) % _capacity;
     }
 };
 
@@ -40,8 +40,8 @@ private:
  *
  * Returns the object stored at a given index.
  */
-template <typename T, int capacity>
-inline T RingBuffer<T, capacity>::read(int index)
+template <typename T, int _capacity>
+inline T RingBuffer<T, _capacity>::read(int index)
 {
     return data[getRealIndex(index)];
 }
@@ -51,8 +51,8 @@ inline T RingBuffer<T, capacity>::read(int index)
  *
  * Returns a reference to the object stored at a given index.
  */
-template <typename T, int capacity>
-inline T& RingBuffer<T, capacity>::operator[](int index)
+template <typename T, int _capacity>
+inline T& RingBuffer<T, _capacity>::operator[](int index)
 {
     return data[getRealIndex(index)];
 }
@@ -62,8 +62,8 @@ inline T& RingBuffer<T, capacity>::operator[](int index)
  *
  * Sets the value of the object stored at the given index.
  */
-template <typename T, int capacity>
-inline void RingBuffer<T, capacity>::write(T value, int index)
+template <typename T, int _capacity>
+inline void RingBuffer<T, _capacity>::write(T value, int index)
 {
     data[getRealIndex(index)] = value;
 }
@@ -75,13 +75,13 @@ inline void RingBuffer<T, capacity>::write(T value, int index)
  * Moves the head forward.
  * Overwrites the oldest value when size == capacity.
  */
-template <typename T, int capacity>
-inline void RingBuffer<T, capacity>::push(T value)
+template <typename T, int _capacity>
+inline void RingBuffer<T, _capacity>::push(T value)
 {
-    ++headIndex %= capacity;
+    ++headIndex %= _capacity;
     data[headIndex] = value;
-    if (size < capacity)
-        ++size;
+    if (_size < _capacity)
+        ++_size;
 }
 
 
@@ -91,13 +91,13 @@ inline void RingBuffer<T, capacity>::push(T value)
  * Moves the head backward.
  * Calling pop() when size == 0 results in undefined behavior.
  */
-template <typename T, int capacity>
-inline T RingBuffer<T, capacity>::pop()
+template <typename T, int _capacity>
+inline T RingBuffer<T, _capacity>::pop()
 {
     int oldHead = headIndex;
-    headIndex = (headIndex - 1 + capacity) % capacity;
+    headIndex = (headIndex - 1 + _capacity) % _capacity;
     if (size > 0)
-        --size;
+        --_size;
     return data[oldHead]; 
 }
 

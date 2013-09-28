@@ -122,7 +122,7 @@ void clearScreen()
 }
 
 
-void driveForward(uint8_t speed = 255)
+void driveForward(uint8_t speed)
 {
     rightMotor.setSpeed(speed);
     leftMotor.setSpeed(speed);
@@ -132,7 +132,7 @@ void driveForward(uint8_t speed = 255)
 }
 
 
-void driveBackward(uint8_t speed = 255)
+void driveBackward(uint8_t speed)
 {
     rightMotor.setSpeed(speed);
     leftMotor.setSpeed(speed);
@@ -154,7 +154,7 @@ void coast()
     leftMotor.run(RELEASE);
 }
 
-void turnDegrees(int degrees, uint8_t speed = 255)
+void turnDegrees(int degrees, uint8_t speed)
 {
     // Spin in place
     // CCW is positive
