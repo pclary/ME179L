@@ -1,151 +1,149 @@
 #include <AFMotor.h>
 #include <SoftwareSerial.h>
 
-const int lBump = 11;  //define pins and motor speed. LCDRx is a dummy pin for setup purposes
-const int rBump = 10;
+// Pin assignments
+const int leftBumper = 11;
+const int rightBumper = 10;
 const int LCDTx = 13;
 const int LCDRx = 13;
-int motorSpeed = 255;
 
-AF_DCMotor rMotor(1, MOTOR12_1KHZ);  //right motor is on port 1, left on port 2
-AF_DCMotor lMotor(2, MOTOR12_1KHZ);
-SoftwareSerial screen = SoftwareSerial(LCDRx, LCDTx);  //got screen?
+// Initialize motors and LCD screen
+AF_DCMotor rightMotor(1, MOTOR12_1KHZ);
+AF_DCMotor leftMotor(2, MOTOR12_1KHZ);
+SoftwareSerial screen = SoftwareSerial(LCDRx, LCDTx);
+
+
+void clearScreen()
+{
+    // Clear screen and reset cursor position
+    screen.print("?f?x00?y0");
+}
 
 
 void driveForward(uint8_t speed = 255)
 {
-    rMotor.setSpeed(speed);
-    lMotor.setSpeed(speed);
+    rightMotor.setSpeed(speed);
+    leftMotor.setSpeed(speed);
     
-    rMotor.run(FORWARD);
-    lMotor.run(FORWARD);
+    rightMotor.run(FORWARD);
+    leftMotor.run(FORWARD);
 }
 
 
 void driveBackward(uint8_t speed = 255)
 {
-    rMotor.setSpeed(speed);
-    lMotor.setSpeed(speed);
+    rightMotor.setSpeed(speed);
+    leftMotor.setSpeed(speed);
     
-    rMotor.run(BACKWARD);
-    lMotor.run(BACKWARD);
+    rightMotor.run(BACKWARD);
+    leftMotor.run(BACKWARD);
 }
 
 
 void brake()
 {
-    rMotor.setSpeed(0);
-    lMotor.setSpeed(0);
+    rightMotor.setSpeed(0);
+    leftMotor.setSpeed(0);
 }
-
 
 void coast()
 {
-    rMotor.run(RELEASE);
-    lMotor.run(RELEASE);
+    rightMotor.run(RELEASE);
+    leftMotor.run(RELEASE);
 }
 
-
-void turnDegrees(int degrees, uint8_t speed = 255) // CCW is positive
+void turnDegrees(int degrees, uint8_t speed = 255)
 {
-    rMotor.setSpeed(speed);
-    lMotor.setSpeed(speed);
+    // Spin in place
+    // CCW is positive
+    
+    brake(50);
+
+    rightMotor.setSpeed(speed);
+    leftMotor.setSpeed(speed);
     
     if (degrees > 0)
     {
-        rMotor.run(BACKWARD);
-        lMotor.run(FORWARD);
+        rightMotor.run(BACKWARD);
+        leftMotor.run(FORWARD);
     }
     else
     {
-        rMotor.run(FORWARD);
-        lMotor.run(BACKWARD);
+        rightMotor.run(FORWARD);
+        leftMotor.run(BACKWARD);
     }
     
     delay(10 * degrees);
-    
     brake();
-    
     delay(50);
 }
 
 
 void setup()
 {
-    pinMode(lBump, INPUT);  //switches are inputs, LCD is an output
-    pinMode(rBump, INPUT);
+    // Set up pins
+    pinMode(leftBumper, INPUT);
+    pinMode(rightBumper, INPUT);
     pinMode(LCDTx, OUTPUT);
     
-    digitalWrite(lBump, HIGH);  //sets pin high such that the switches can pull them low
-    digitalWrite(rBump, HIGH);  // or drain them to ground, however you want to think
+    // Bump switches are pulled low when pressed
+    digitalWrite(leftBumper, HIGH);
+    digitalWrite(rightBumper, HIGH);
     
     screen.begin(9600);
-    screen.print("?f");  //clears screen
-    screen.print("?x00?y0");  //sets cursor to x=00 and y=0
+    clearScreen();
+    screen.print("Bump to begin.");
     
-    rMotor.setSpeed(motorSpeed);
-    lMotor.setSpeed(motorSpeed);
+    // Motors are disabled at start
+    coast();
     
-    screen.print("Bump to begin.     ");
-    
-    while ( digitalRead(lBump) && digitalRead(rBump) )  //wait for a bump
+    // Wait for one of the bumpers to be pressed
+    while (digitalRead(leftBumper) && digitalRead(rightBumper))
     {
     }
     
-    for (int i = 3; i > 0; i--)  //countdown for fun. maybe add racing beeps later
+    // Three second countdown before the robot starts moving
+    for (int count = 3; count > 0; --count)
     {
-        screen.print("?x00?y0");
-        screen.print("                 ");
-        screen.print("?x00?y0");
-        screen.print(i);
+        clearScreen();
+        screen.print(count);
         delay(1000);
     }
 }
 
+
 void loop()
 {
-    screen.print("?f?x00?y0");
-    screen.print("Rolling         ");
+    clearScreen();
+    screen.print("Rolling");
     
-    rMotor.run(FORWARD);
-    lMotor.run(FORWARD);
+    driveForward();
     
+    // Drive forward until either switch is pressed
     bool leftHit, rightHit;
     
-    while ( !(leftHit = !digitalRead(lBump)) && !(rightHit = !digitalRead(rBump)) )
+    do
     {
+        rightHit = !digitalRead(rightBumper);
+        leftHit = !digitalRead(leftBumper);
     }
-  
-    if (leftHit)  //if the left switch is hit
-    {
-        screen.print("?x00?y0LEFT");
-        lMotor.run(BACKWARD);|
-        rMotor.run(BACKWARD);  //backup for 300ms
-        delay(1500);
-        lMotor.run(RELEASE);  //stahp
-        rMotor.run(RELEASE);
-        lMotor.run(FORWARD);  //spin CW about center for 100ms
-        rMotor.run(BACKWARD);
-        delay(300);
-    }
-    else
-    {
-        screen.print(?"?x00?y0");
-        screen.print("RIGHT            ");
-        lMotor.run(BACKWARD);
-        rMotor.run(BACKWARD);
-        delay(1500);
-        lMotor.run(RELEASE);  //stahp
-        rMotor.run(RELEASE);
-        rMotor.run(FORWARD);  //spin CCW about center for 100ms
-        lMotor.run(BACKWARD);
-        delay(300);
-    }
+    while (!rightHit && !leftHit)
     
-    /* logic of the above is if bot hits dead on (both switches) or left switch,
-     * the first if statement will read a hit on the left switch, reverse, and spin CW
-     * otherwise (so if only a right hit, or momentary tap of left switch/both switches
-     * reverse and spin CCW. the while prefacing the if's should garentee a hit did
-     * infact happen.
-     */
+    // Determine which switch was pressed, then back up and turn to avoid the obstacle
+    if (leftHit)
+    {
+        clearScreen();
+        screen.print("LEFT");
+        driveBackward();
+        delay(1500);
+        turnDegrees(-30);
+    }
+    else // rightHit
+    {
+        clearScreen();
+        screen.print("RIGHT");
+        driveBackward();
+        delay(1500);
+        turnDegrees(30);
+    }
 }
