@@ -57,7 +57,8 @@ void turnDegrees(int degrees, uint8_t speed = 255)
     // Spin in place
     // CCW is positive
     
-    brake(50);
+    brake();
+	delay(50);
 
     rightMotor.setSpeed(speed);
     leftMotor.setSpeed(speed);
@@ -127,7 +128,7 @@ void loop()
         rightHit = !digitalRead(rightBumper);
         leftHit = !digitalRead(leftBumper);
     }
-    while (!rightHit && !leftHit)
+    while (!rightHit && !leftHit);
     
     // Determine which switch was pressed, then back up and turn to avoid the obstacle
     if (leftHit)
