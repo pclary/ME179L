@@ -22,6 +22,10 @@ enum Side
 
 RingBuffer<Side, 6> bumpHistory;
 
+// Fine tuning
+const int rMotorDrag = 0;
+const int lMotorDrag = 0;
+const int degFactor = 10;
 
 // Function prototypes
 void clearScreen();
@@ -124,8 +128,8 @@ void clearScreen()
 
 void driveForward(uint8_t speed)
 {
-    rightMotor.setSpeed(speed);
-    leftMotor.setSpeed(speed);
+    rightMotor.setSpeed(speed - rMotorDrag);
+    leftMotor.setSpeed(speed - lMotorDrag);
     
     rightMotor.run(FORWARD);
     leftMotor.run(FORWARD);
@@ -134,8 +138,8 @@ void driveForward(uint8_t speed)
 
 void driveBackward(uint8_t speed)
 {
-    rightMotor.setSpeed(speed);
-    leftMotor.setSpeed(speed);
+    rightMotor.setSpeed(speed - rMotorDrag);
+    leftMotor.setSpeed(speed - lMotorDrag);
     
     rightMotor.run(BACKWARD);
     leftMotor.run(BACKWARD);
@@ -193,8 +197,8 @@ void turnDegrees(int degrees, uint8_t speed)
     brake();
 	delay(50);
 
-    rightMotor.setSpeed(speed);
-    leftMotor.setSpeed(speed);
+    rightMotor.setSpeed(speed - rMotorDrag);
+    leftMotor.setSpeed(speed - lMotorDrag);
     
     if (degrees > 0)
     {
@@ -207,7 +211,7 @@ void turnDegrees(int degrees, uint8_t speed)
         leftMotor.run(BACKWARD);
     }
     
-    delay(10 * degrees);
+    delay(degFactor * degrees);
     brake();
     delay(50);
 }
