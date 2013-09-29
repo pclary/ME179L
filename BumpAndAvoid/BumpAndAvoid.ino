@@ -197,7 +197,7 @@ bool checkCorner()
     for (int i = 1; i < bumpHistory.size(); ++i)
     {
         // If two bumps in a row are the same, it is not stuck in a corner
-        if (bumpHistory[i] == bumpHistory[i + 1])
+        if (bumpHistory[i] == bumpHistory[i - 1])
             return false;
     }
     
