@@ -144,12 +144,40 @@ void driveBackward(uint8_t speed)
 
 void brake()
 {
+    // setting speed to 0 is the same as RELEASE, you will have one pin on the motor grounded and the other not connected to
+    // anything. To break you need both pins connected to positive or to ground forcing voltage across the motor to be 0.
+    // unfortunately from what I can tell the adafruit shield does not support motor braking, and diode'ing the motor terminals
+    // will only work if you only run the motors one direction.
     rightMotor.run(FORWARD);
     leftMotor.run(FORWARD);
 
     rightMotor.setSpeed(0);
     leftMotor.setSpeed(0);
 }
+    // closest thing to actually braking would be:
+    /*
+    while(abs(getVelocity()) > 0
+    {
+      if(getVelocity() > 0)
+      {
+        driveBackward(aSmallNum);
+      }
+      elseif(getVelocity() < 0)
+      {
+        driveForward(aSmallNum);
+      }
+      else
+      {
+        clearScreen();
+        screen.print("Error: brake");
+      }
+    }
+    coast();
+    
+    where getVelocity() gets the vehicles current velocity
+    and aSmallNum is the largest possible value of speed that won't move the robot from stop.
+    this would however stress the shit out of all electronics involved if i'm not mistaken.
+    */
 
 void coast()
 {
