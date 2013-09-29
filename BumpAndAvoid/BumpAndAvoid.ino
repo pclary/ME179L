@@ -144,6 +144,9 @@ void driveBackward(uint8_t speed)
 
 void brake()
 {
+    rightMotor.run(FORWARD);
+    leftMotor.run(FORWARD);
+
     rightMotor.setSpeed(0);
     leftMotor.setSpeed(0);
 }
