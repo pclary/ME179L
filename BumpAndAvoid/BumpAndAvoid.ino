@@ -116,7 +116,7 @@ void loop()
         // Back up and turn away from the obstacle
         driveBackward();
         delay(1000);
-        turnDegrees(rightHit ? 30 : -30);
+        turnDegrees(rightHit ? 60 : -60);
     }
 }
 
