@@ -25,7 +25,7 @@ RingBuffer<Side, 6> bumpHistory;
 // Fine tuning
 const int rMotorDrag = 0;
 const int lMotorDrag = 0;
-const int turnMs = 1600;
+const long turnMs = 1600;
 
 // Function prototypes
 void clearScreen();
@@ -213,7 +213,7 @@ void turnDegrees(int degrees, uint8_t speed)
         leftMotor.run(FORWARD);
     }
     
-    delay(abs(degrees * turnMs / 360));
+    delay(abs((int)((long)degrees * turnMs / 360l)));
     brake();
     delay(50);
 }
