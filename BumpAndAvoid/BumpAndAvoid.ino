@@ -116,7 +116,7 @@ void loop()
         // Back up and turn away from the obstacle
         driveBackward();
         delay(1000);
-        turnDegrees(rightHit ? 60 : -60);
+        turnDegrees(rightHit ? 50 : -75);
     }
 }
 
@@ -236,6 +236,6 @@ bool checkCorner()
     }
     
     // Control reaches here if the bump history alternates left and right
-    return true;
 	bumpHistory.clear();
+    return true;
 }
