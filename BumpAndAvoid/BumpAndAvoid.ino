@@ -25,7 +25,7 @@ RingBuffer<Side, 6> bumpHistory;
 // Fine tuning
 const int rMotorDrag = 0;
 const int lMotorDrag = 0;
-const int degFactor = 10;
+const int turnMs = 1600;
 
 // Function prototypes
 void clearScreen();
@@ -105,6 +105,8 @@ void loop()
     if (checkCorner())
     {
         // Back up and turn around 180 degrees
+		clearScreen();
+    	screen.print("CORNER");
         driveBackward();
         delay(1000);
         turnDegrees(180);
@@ -211,7 +213,7 @@ void turnDegrees(int degrees, uint8_t speed)
         leftMotor.run(BACKWARD);
     }
     
-    delay(degFactor * degrees);
+    delay(abs(degrees * turnMs / 360));
     brake();
     delay(50);
 }
@@ -235,4 +237,5 @@ bool checkCorner()
     
     // Control reaches here if the bump history alternates left and right
     return true;
+	bumpHistory.clear();
 }

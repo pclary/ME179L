@@ -24,6 +24,10 @@ public:
     {
         return Capacity;
     }
+	void clear()
+	{
+		size_ = 0;
+	}
 
 private:
     T data[Capacity];
