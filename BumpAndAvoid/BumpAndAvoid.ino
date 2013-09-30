@@ -204,13 +204,13 @@ void turnDegrees(int degrees, uint8_t speed)
     
     if (degrees > 0)
     {
-        rightMotor.run(BACKWARD);
-        leftMotor.run(FORWARD);
+        rightMotor.run(FORWARD);
+        leftMotor.run(BACKWARD);
     }
     else
     {
-        rightMotor.run(FORWARD);
-        leftMotor.run(BACKWARD);
+        rightMotor.run(BACKWARD);
+        leftMotor.run(FORWARD);
     }
     
     delay(abs(degrees * turnMs / 360));
