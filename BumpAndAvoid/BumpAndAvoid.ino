@@ -22,16 +22,10 @@ enum Side
 
 RingBuffer<Side, 6> bumpHistory;
 
-// Fine tuning
-const int rMotorDrag = 0;
-const int lMotorDrag = 0;
-const long turnMs = 1600;
-
 // Function prototypes
 void clearScreen();
 void driveForward(uint8_t speed = 255);
 void driveBackward(uint8_t speed = 255);
-void brake();
 void coast();
 void turnDegrees(int degrees, uint8_t speed = 255);
 bool checkCorner();
@@ -130,8 +124,8 @@ void clearScreen()
 
 void driveForward(uint8_t speed)
 {
-    rightMotor.setSpeed(speed - rMotorDrag);
-    leftMotor.setSpeed(speed - lMotorDrag);
+    rightMotor.setSpeed(speed);
+    leftMotor.setSpeed(speed);
     
     rightMotor.run(FORWARD);
     leftMotor.run(FORWARD);
@@ -140,50 +134,13 @@ void driveForward(uint8_t speed)
 
 void driveBackward(uint8_t speed)
 {
-    rightMotor.setSpeed(speed - rMotorDrag);
-    leftMotor.setSpeed(speed - lMotorDrag);
+    rightMotor.setSpeed(speed);
+    leftMotor.setSpeed(speed);
     
     rightMotor.run(BACKWARD);
     leftMotor.run(BACKWARD);
 }
 
-
-void brake()
-{
-    // setting speed to 0 is the same as RELEASE, you will have one pin on the motor grounded and the other not connected to
-    // anything. To break you need both pins connected to positive or to ground forcing voltage across the motor to be 0.
-    // unfortunately from what I can tell the adafruit shield does not support motor braking, and diode'ing the motor terminals
-    // will only work if you only run the motors one direction.
-    rightMotor.run(FORWARD);
-    leftMotor.run(FORWARD);
-
-    rightMotor.setSpeed(0);
-    leftMotor.setSpeed(0);
-}
-    // closest thing to actually braking would be:
-    /*
-    while(abs(getVelocity()) > 0
-    {
-      if(getVelocity() > 0)
-      {
-        driveBackward(aSmallNum);
-      }
-      elseif(getVelocity() < 0)
-      {
-        driveForward(aSmallNum);
-      }
-      else
-      {
-        clearScreen();
-        screen.print("Error: brake");
-      }
-    }
-    coast();
-    
-    where getVelocity() gets the vehicles current velocity
-    and aSmallNum is the largest possible value of speed that won't move the robot from stop.
-    this would however stress the shit out of all electronics involved if i'm not mistaken.
-    */
 
 void coast()
 {
@@ -191,16 +148,18 @@ void coast()
     leftMotor.run(RELEASE);
 }
 
+
 void turnDegrees(int degrees, uint8_t speed)
 {
+    const long turnMs = 1600;
     // Spin in place
     // CCW is positive
     
-    brake();
+    coast();
 	delay(50);
 
-    rightMotor.setSpeed(speed - rMotorDrag);
-    leftMotor.setSpeed(speed - lMotorDrag);
+    rightMotor.setSpeed(speed);
+    leftMotor.setSpeed(speed);
     
     if (degrees > 0)
     {
@@ -214,7 +173,7 @@ void turnDegrees(int degrees, uint8_t speed)
     }
     
     delay(abs((int)((long)degrees * turnMs / 360l)));
-    brake();
+    coast();
     delay(50);
 }
 
