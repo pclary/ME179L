@@ -21,7 +21,7 @@ struct EncoderData
     EncoderData() { count = 0; direction = 1.f; }
     void reset() { count = 0; pulseTimes.clear(); pulseTimes.push(0ul); }
     volatile unsigned long count;
-    volatile RingBuffer<unsigned long, 2> pulseTimes;
+    volatile RingBuffer<unsigned long, 6> pulseTimes;
     float direction;
 };
 
@@ -316,7 +316,7 @@ float getVelocity(EncoderData& data)
         return 0.f;
     
     noInterrupts();
-    unsigned long lastDiff = data.pulseTimes[0] - data.pulseTimes[1];
+    unsigned long lastDiff = data.pulseTimes[0] - data.pulseTimes[4];
     unsigned long newDiff = micros() - data.pulseTimes[0];
     interrupts();
     
@@ -325,8 +325,8 @@ float getVelocity(EncoderData& data)
      * use it for the velocity calculation instead. This causes the velocity to 
      * go to zero when the robot is stationary (no pulses are generated).
      */
-    if (newDiff > lastDiff)
+    if (newDiff > lastDiff / 4ul)
         return data.direction * wheelDiameter / (newDiff * pulsesPerRev) * ticksPerSecond;
     else
-        return data.direction * wheelDiameter / (lastDiff * pulsesPerRev) * ticksPerSecond;;
+        return data.direction * wheelDiameter / (lastDiff * pulsesPerRev / 4ul) * ticksPerSecond;;
 }
