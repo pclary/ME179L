@@ -19,7 +19,7 @@ AF_DCMotor leftMotor(4, MOTOR34_1KHZ);
 struct EncoderData
 {
     EncoderData() { count = 0; direction = 1.f; }
-    reset() { count = 0; pulseTimes.clear(); pulseTimes.push(0ul); }
+    void reset() { count = 0; pulseTimes.clear(); pulseTimes.push(0ul); }
     volatile unsigned long count;
     volatile RingBuffer<unsigned long, 2> pulseTimes;
     float direction;
@@ -73,7 +73,6 @@ enum CommandMode
     velocityMode
 };
 CommandMode commandMode;
-bool showResults = false;
 
 // Integral terms
 const float integralThreshold = 255.f;
@@ -96,6 +95,7 @@ const unsigned int displayUpdateCycles = 10;
 
 // Movement control
 bool started = false;
+bool showResults = false;
 unsigned long startedMillis;
 const float positionThreshold = 0.01; // meters
 const float velocityThreshold = 0.01; // m/s
@@ -274,7 +274,7 @@ void loop()
             }
             else if (showResults)
             {
-                snprintf(buffer, 17, "RCnt: %10ul", rightData.count;
+                snprintf(buffer, 17, "RCnt: %10ul", rightData.count);
                 Serial.print(buffer);
                 snprintf(buffer, 17, "LCnt: %10ul", leftData.count);
                 Serial.print(buffer);
