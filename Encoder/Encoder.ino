@@ -6,6 +6,9 @@
 // Pin assignments
 const int rightInterruptPin = 2;
 const int leftInterruptPin = 3;
+const int startPin = 5;
+const int modeChangePin = 6;
+const int analogPin = 0;
 
 // Initialize motors and LCD screen
 AF_DCMotor rightMotor(3, MOTOR34_1KHZ);
@@ -14,9 +17,10 @@ AF_DCMotor leftMotor(4, MOTOR34_1KHZ);
 // Encoder variables
 struct EncoderData
 {
-    EncoderData() { count = 0; }
+    EncoderData() { count = 0; direction = 1.f; }
     volatile unsigned long count;
     volatile RingBuffer<unsigned long, 2> pulseTimes;
+    float direction;
 };
 
 EncoderData rightData;
@@ -87,16 +91,21 @@ unsigned int loopPeriodMs = 50;
 unsigned int cycleCount = 0;
 const unsigned int displayUpdateCycles = 5;
 
-// Data display
-enum DisplayMode
-{
-    displayPosition,
-    displayVelocity,
-    displayPositionCommand,
-    displayVelocityCommand
-};
+// Movement control
+bool started = false;
+unsigned long startedMillis;
+const float positionThreshold = 0.01; // meters
+const float velocityThreshold = 0.01; // m/s
+const unsigned long positionTimeout = 20000; // milliseconds
+const unsigned long velocityRunTime = 5000; // milliseconds
+const float positionMin = -10.f; // meters
+const float positionMax = 10.f; // meters
+const float velocityMin = -1.f; // m/s
+const float velocityMax = 1.f; // m/s
 
-DisplayMode displayMode;
+// Buttons
+bool startPressed = false;
+bool modeChangePressed = false;
 
 
 void setup()
@@ -104,15 +113,17 @@ void setup()
     // Set up pins
     pinMode(rightInterruptPin, INPUT);
     pinMode(leftInterruptPin, INPUT);
+    pinMode(startPin, INPUT);
+    pinMode(modeChangePin, INPUT);
+    digitalWrite(rightInterruptPin, HIGH);
     digitalWrite(leftInterruptPin, HIGH);
-    digitalWrite(leftInterruptPin, HIGH);
+    digitalWrite(startPin, HIGH);
+    digitalWrite(modeChangePin, HIGH);
     
     rightData.pulseTimes.push(0ul);
     leftData.pulseTimes.push(0ul);
     
     commandMode = positionMode;
-    rightPositionCommand = 0.f;
-    leftPositionCommand = 0.f;
     
     attachInterrupt(0, &rightPulse, RISING);
     attachInterrupt(1, &leftPulse, RISING);
@@ -123,31 +134,94 @@ void setup()
 
 void loop()
 {
-    if (commandMode == positionMode)
-    {   
-        // Position loop
-        rightVelocityCommand = pl_kp * (rightPositionCommand - getPosition(rightData));
-        leftVelocityCommand = pl_kp * (leftPositionCommand - getPosition(leftData));
+    // Process input buttons
+    bool temp;
+    
+    if ( (temp = digitalRead(startPin)) && startPressed ) // Detect a rising edge (button release)
+    {
+        started = !started;
+        startedMillis = millis();
     }
     
-    // Velocity loop
-    float rightVelErr = rightVelocityCommand - getVelocity(rightData);
-    float leftVelErr = leftVelocityCommand - getVelocity(leftData);
+    startPressed = !temp;
     
-    rightVelInt += rightVelErr * (loopPeriodMs / 1000.f);
-    leftVelInt += leftVelErr * (loopPeriodMs / 1000.f);
+    if ( (temp = digitalRead(modeChangePin)) && modeChangePressed )
+    {
+        commandMode = (commandMode == positionMode) ? velocityMode : positionMode;
+    }
     
-    // Limit integral terms to prevent windup
-    rightVelInt = constrain(rightVelInt, -integralThreshold, integralThreshold);
-    leftVelInt = constrain(leftVelInt, -integralThreshold, integralThreshold);
+    modeChangePressed = !temp;
     
-    float rightAccel = vl_kp * rightVelErr + vl_ki * rightVelInt;
-    float leftAccel = vl_kp * leftVelErr + vl_ki * leftVelInt;
     
-    rightMotor.run(rightAccel > 0.f ? FORWARD : BACKWARD);
-    rightMotor.setSpeed( (unsigned char)fabs(rightAccel) );
-    leftMotor.run(leftAccel > 0.f ? FORWARD : BACKWARD);
-    leftMotor.setSpeed( (unsigned char)fabs(leftAccel) );
+    if (started)
+    {
+        // Position loop
+        float rightPosErr = rightPositionCommand - getPosition(rightData);
+        float leftPosErr = leftPositionCommand - getPosition(leftData);
+        
+        if (commandMode == positionMode)
+        {
+            rightVelocityCommand = pl_kp * rightPosErr;
+            leftVelocityCommand = pl_kp * leftPosErr;
+        }
+        
+        // Velocity loop
+        float rightVelErr = rightVelocityCommand - getVelocity(rightData);
+        float leftVelErr = leftVelocityCommand - getVelocity(leftData);
+        
+        rightVelInt += rightVelErr * (loopPeriodMs / 1000.f);
+        leftVelInt += leftVelErr * (loopPeriodMs / 1000.f);
+        
+        // Limit integral terms to prevent windup
+        rightVelInt = constrain(rightVelInt, -integralThreshold, integralThreshold);
+        leftVelInt = constrain(leftVelInt, -integralThreshold, integralThreshold);
+        
+        float rightAccel = vl_kp * rightVelErr + vl_ki * rightVelInt;
+        float leftAccel = vl_kp * leftVelErr + vl_ki * leftVelInt;
+        
+        rightMotor.run((rightAccel > 0.f) ? FORWARD : BACKWARD);
+        rightMotor.setSpeed( (unsigned char)fabs(rightAccel) );
+        leftMotor.run((leftAccel > 0.f) ? FORWARD : BACKWARD);
+        leftMotor.setSpeed( (unsigned char)fabs(leftAccel) );
+        
+        rightData.direction = (rightAccel > 0.f) ? 1.f : -1.f;
+        leftData.direction = (leftAccel > 0.f) ? 1.f : -1.f;
+        
+        // Handle stopping
+        if (commandMode == positionMode)
+        {
+            // Stop when close to the target distance with a low speed or after a timeout
+            if ( (fabs(rightPosErr) < positionThreshold && fabs(leftPosErr) < positionThreshold &&
+                  fabs(rightVelErr) < velocityThreshold && fabs(leftVelErr) < velocityThreshold) ||
+                millis() - startedMillis >= positionTimeout )
+                started = false;
+        }
+        else // velocityMode
+        {
+            // Stop after a certain time
+            if (millis() - startedMillis >= velocityRunTime)
+                started = false;
+        }
+    }
+    else
+    {
+        rightMotor.run(RELEASE);
+        leftMotor.run(RELEASE);
+        
+        // Update command value
+        float value = analogRead(analogPin) / 1023.f;
+        
+        if (commandMode == positionMode)
+        {
+            rightPositionCommand = positionMin + value * (positionMax - positionMin);
+            leftPositionCommand = positionMin + value * (positionMax - positionMin);
+        }
+        else // velocityMode
+        {
+            rightVelocityCommand = velocityMin + value * (velocityMax - velocityMin);
+            leftVelocityCommand = velocityMin + value * (velocityMax - velocityMin);
+        }
+    }
     
     
     // Update display once every few cycles 
@@ -156,32 +230,39 @@ void loop()
         char buffer[17];
         Serial.print("?f?x00?y0");
     
-        switch (displayMode)
+        if (commandMode == positionMode)
         {
-        case displayPosition:
-            snprintf(buffer, 17, "RPos: %*.3f m/s", 16, getPosition(rightData));
-            Serial.print(buffer);
-            snprintf(buffer, 17, "LPos: %*.3f m/s", 16, getPosition(leftData));
-            Serial.print(buffer);
-            break;
-        case displayVelocity:
-            snprintf(buffer, 17, "RVel: %*.3f m/s", 16, getVelocity(rightData));
-            Serial.print(buffer);
-            snprintf(buffer, 17, "LVel: %*.3f m/s", 16, getVelocity(leftData));
-            Serial.print(buffer);
-            break;
-        case displayPositionCommand:
-            snprintf(buffer, 17, "RPCmd: %*.3f m/s", 16, rightPositionCommand);
-            Serial.print(buffer);
-            snprintf(buffer, 17, "LPCmd: %*.3f m/s", 16, leftPositionCommand);
-            Serial.print(buffer);
-            break;
-        case displayVelocityCommand:
-            snprintf(buffer, 17, "RVCmd: %*.3f m/s", 16, rightVelocityCommand);
-            Serial.print(buffer);
-            snprintf(buffer, 17, "LVCmd: %*.3f m/s", 16, leftVelocityCommand);
-            Serial.print(buffer);
-            break;
+            if (started)
+            {
+                snprintf(buffer, 17, "RPos: %*.3f m/s", 16, getPosition(rightData));
+                Serial.print(buffer);
+                snprintf(buffer, 17, "LPos: %*.3f m/s", 16, getPosition(leftData));
+                Serial.print(buffer);
+            }
+            else
+            {
+                snprintf(buffer, 17, "RVel: %*.3f m/s", 16, getVelocity(rightData));
+                Serial.print(buffer);
+                snprintf(buffer, 17, "LVel: %*.3f m/s", 16, getVelocity(leftData));
+                Serial.print(buffer);
+            }
+        }
+        else // velocityMode
+        {
+            if (started)
+            {
+                snprintf(buffer, 17, "RPCmd: %*.3f m/s", 16, rightPositionCommand);
+                Serial.print(buffer);
+                snprintf(buffer, 17, "LPCmd: %*.3f m/s", 16, leftPositionCommand);
+                Serial.print(buffer);
+            }
+            else
+            {
+                snprintf(buffer, 17, "RVCmd: %*.3f m/s", 16, rightVelocityCommand);
+                Serial.print(buffer);
+                snprintf(buffer, 17, "LVCmd: %*.3f m/s", 16, leftVelocityCommand);
+                Serial.print(buffer);
+            }
         }
     }
     
@@ -222,7 +303,7 @@ float getVelocity(EncoderData& data)
      * go to zero when the robot is stationary (no pulses are generated).
      */
     if (newDiff > lastDiff)
-        return wheelDiameter / (newDiff * pulsesPerRev) * ticksPerSecond;
+        return data.direction * wheelDiameter / (newDiff * pulsesPerRev) * ticksPerSecond;
     else
-        return wheelDiameter / (lastDiff * pulsesPerRev) * ticksPerSecond;;
+        return data.direction * wheelDiameter / (lastDiff * pulsesPerRev) * ticksPerSecond;;
 }
