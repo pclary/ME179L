@@ -18,6 +18,7 @@ AF_DCMotor leftMotor(4, MOTOR34_1KHZ);
 struct EncoderData
 {
     EncoderData() { count = 0; direction = 1.f; }
+    reset() { count = 0; pulseTimes.clear(); pulseTimes.push(0ul); }
     volatile unsigned long count;
     volatile RingBuffer<unsigned long, 2> pulseTimes;
     float direction;
@@ -71,6 +72,7 @@ enum CommandMode
     velocityMode
 };
 CommandMode commandMode;
+bool showResults = false;
 
 // Integral terms
 const float integralThreshold = 255.f;
@@ -87,9 +89,9 @@ float vl_kd = 0.f;
 
 // Loop control
 unsigned long lastMillis = 0;
-unsigned int loopPeriodMs = 50;
+unsigned int loopPeriodMs = 20;
 unsigned int cycleCount = 0;
-const unsigned int displayUpdateCycles = 5;
+const unsigned int displayUpdateCycles = 10;
 
 // Movement control
 bool started = false;
@@ -141,13 +143,20 @@ void loop()
     {
         started = !started;
         startedMillis = millis();
+        noInterrupts();
+        rightData.reset();
+        leftData.reset();
+        interrupts();
     }
     
     startPressed = !temp;
     
     if ( (temp = digitalRead(modeChangePin)) && modeChangePressed )
     {
-        commandMode = (commandMode == positionMode) ? velocityMode : positionMode;
+        if (showResults)
+            showResults = false;
+        else
+            commandMode = (commandMode == positionMode) ? velocityMode : positionMode;
     }
     
     modeChangePressed = !temp;
@@ -194,13 +203,19 @@ void loop()
             if ( (fabs(rightPosErr) < positionThreshold && fabs(leftPosErr) < positionThreshold &&
                   fabs(rightVelErr) < velocityThreshold && fabs(leftVelErr) < velocityThreshold) ||
                 millis() - startedMillis >= positionTimeout )
+            {
                 started = false;
+                showResults = true;
+            }
         }
         else // velocityMode
         {
             // Stop after a certain time
             if (millis() - startedMillis >= velocityRunTime)
+            {
                 started = false;
+                showResults = true;
+            }
         }
     }
     else
@@ -232,7 +247,7 @@ void loop()
     
         if (commandMode == positionMode)
         {
-            if (started)
+            if (started || showResults)
             {
                 snprintf(buffer, 17, "RPos: %*.3f m/s", 16, getPosition(rightData));
                 Serial.print(buffer);
@@ -241,9 +256,9 @@ void loop()
             }
             else
             {
-                snprintf(buffer, 17, "RVel: %*.3f m/s", 16, getVelocity(rightData));
+                snprintf(buffer, 17, "RPCmd: %*.3f m/s", 16, rightPositionCommand);
                 Serial.print(buffer);
-                snprintf(buffer, 17, "LVel: %*.3f m/s", 16, getVelocity(leftData));
+                snprintf(buffer, 17, "LPCmd: %*.3f m/s", 16, leftPositionCommand);
                 Serial.print(buffer);
             }
         }
@@ -251,9 +266,16 @@ void loop()
         {
             if (started)
             {
-                snprintf(buffer, 17, "RPCmd: %*.3f m/s", 16, rightPositionCommand);
+                snprintf(buffer, 17, "RVel: %*.3f m/s", 16, getVelocity(rightData));
                 Serial.print(buffer);
-                snprintf(buffer, 17, "LPCmd: %*.3f m/s", 16, leftPositionCommand);
+                snprintf(buffer, 17, "LVel: %*.3f m/s", 16, getVelocity(leftData));
+                Serial.print(buffer);
+            }
+            else if (showResults)
+            {
+                snprintf(buffer, 17, "RCnt: %*ul", 16, rightData.count;
+                Serial.print(buffer);
+                snprintf(buffer, 17, "LCnt: %*ul", 16, leftData.count);
                 Serial.print(buffer);
             }
             else
@@ -267,7 +289,7 @@ void loop()
     }
     
     
-    // Limit loop speed to a consistent value to make integration easier
+    // Limit loop speed to a consistent value to make timing and integration simpler
     while (millis() - lastMillis < loopPeriodMs)
     {
     }
