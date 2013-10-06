@@ -3,6 +3,7 @@
 #include <cmath>
 #include <cstdio>
 
+
 // Pin assignments
 const int rightInterruptPin = 2;
 const int leftInterruptPin = 3;
@@ -249,16 +250,16 @@ void loop()
         {
             if (started || showResults)
             {
-                snprintf(buffer, 17, "RPos: %*.3f m/s", 16, getPosition(rightData));
+                snprintf(buffer, 17, "RPos: %6.3f m/s", getPosition(rightData));
                 Serial.print(buffer);
-                snprintf(buffer, 17, "LPos: %*.3f m/s", 16, getPosition(leftData));
+                snprintf(buffer, 17, "LPos: %6.3f m/s", getPosition(leftData));
                 Serial.print(buffer);
             }
             else
             {
-                snprintf(buffer, 17, "RPCmd: %*.3f m/s", 16, rightPositionCommand);
+                snprintf(buffer, 17, "RPCmd: %6.3f m/s", rightPositionCommand);
                 Serial.print(buffer);
-                snprintf(buffer, 17, "LPCmd: %*.3f m/s", 16, leftPositionCommand);
+                snprintf(buffer, 17, "LPCmd: %6.3f m/s", leftPositionCommand);
                 Serial.print(buffer);
             }
         }
@@ -266,23 +267,23 @@ void loop()
         {
             if (started)
             {
-                snprintf(buffer, 17, "RVel: %*.3f m/s", 16, getVelocity(rightData));
+                snprintf(buffer, 17, "RVel: %6.3f m/s", getVelocity(rightData));
                 Serial.print(buffer);
-                snprintf(buffer, 17, "LVel: %*.3f m/s", 16, getVelocity(leftData));
+                snprintf(buffer, 17, "LVel: %6.3f m/s", getVelocity(leftData));
                 Serial.print(buffer);
             }
             else if (showResults)
             {
-                snprintf(buffer, 17, "RCnt: %*ul", 16, rightData.count;
+                snprintf(buffer, 17, "RCnt: %10ul", rightData.count;
                 Serial.print(buffer);
-                snprintf(buffer, 17, "LCnt: %*ul", 16, leftData.count);
+                snprintf(buffer, 17, "LCnt: %10ul", leftData.count);
                 Serial.print(buffer);
             }
             else
             {
-                snprintf(buffer, 17, "RVCmd: %*.3f m/s", 16, rightVelocityCommand);
+                snprintf(buffer, 17, "RVCmd: %6.3f m/s", rightVelocityCommand);
                 Serial.print(buffer);
-                snprintf(buffer, 17, "LVCmd: %*.3f m/s", 16, leftVelocityCommand);
+                snprintf(buffer, 17, "LVCmd: %6.3f m/s", leftVelocityCommand);
                 Serial.print(buffer);
             }
         }
