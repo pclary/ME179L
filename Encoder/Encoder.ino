@@ -326,7 +326,7 @@ float getVelocity(EncoderData& data)
      * go to zero when the robot is stationary (no pulses are generated).
      */
     if (newDiff > lastDiff / 4ul)
-        return data.direction * wheelDiameter / (newDiff * pulsesPerRev) * ticksPerSecond;
+        return data.direction * wheelDiameter / ((newDiff * pulsesPerRev) * ticksPerSecond);
     else
-        return data.direction * wheelDiameter / (lastDiff * pulsesPerRev / 4ul) * ticksPerSecond;;
+        return data.direction * wheelDiameter / (((lastDiff * pulsesPerRev) / 4ul) * ticksPerSecond);
 }
