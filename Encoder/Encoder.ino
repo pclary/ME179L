@@ -4,20 +4,18 @@
 #include <cstdio>
 
 // Pin assignments
-const int LCDTx = 13;
-const int LCDRx = 13;
 const int rightInterruptPin = 2;
 const int leftInterruptPin = 3;
 
 // Initialize motors and LCD screen
 AF_DCMotor rightMotor(3, MOTOR34_1KHZ);
 AF_DCMotor leftMotor(4, MOTOR34_1KHZ);
-SoftwareSerial screen = SoftwareSerial(LCDRx, LCDTx);
 
 // Encoder variables
 struct EncoderData
 {
-    volatile unsigned long count = 0;
+    EncoderData() { count = 0; }
+    volatile unsigned long count;
     volatile RingBuffer<unsigned long, 2> pulseTimes;
 };
 
@@ -104,7 +102,6 @@ DisplayMode displayMode;
 void setup()
 {
     // Set up pins
-    pinMode(LCDTx, OUTPUT);
     pinMode(rightInterruptPin, INPUT);
     pinMode(leftInterruptPin, INPUT);
     digitalWrite(leftInterruptPin, HIGH);
@@ -154,7 +151,7 @@ void loop()
     
     
     // Update display once every few cycles 
-    if (cycleCount % displayUpdateCycles
+    if (cycleCount % displayUpdateCycles)
     {
         char buffer[17];
         Serial.print("?f?x00?y0");
