@@ -1,11 +1,13 @@
 #include <AFMotor.h>
-#include <SoftwareSerial.h>
 #include "RingBuffer.h"
 #include <cmath>
+#include <cstdio>
 
 // Pin assignments
 const int LCDTx = 13;
 const int LCDRx = 13;
+const int rightInterruptPin = 2;
+const int leftInterruptPin = 3;
 
 // Initialize motors and LCD screen
 AF_DCMotor rightMotor(3, MOTOR34_1KHZ);
@@ -83,13 +85,30 @@ float vl_kd = 0.f;
 
 // Loop control
 unsigned long lastMillis = 0;
-unsigned long loopPeriodMs = 50;
+unsigned int loopPeriodMs = 50;
+unsigned int cycleCount = 0;
+const unsigned int displayUpdateCycles = 5;
+
+// Data display
+enum DisplayMode
+{
+    displayPosition,
+    displayVelocity,
+    displayPositionCommand,
+    displayVelocityCommand
+};
+
+DisplayMode displayMode;
 
 
 void setup()
 {
     // Set up pins
     pinMode(LCDTx, OUTPUT);
+    pinMode(rightInterruptPin, INPUT);
+    pinMode(leftInterruptPin, INPUT);
+    digitalWrite(leftInterruptPin, HIGH);
+    digitalWrite(leftInterruptPin, HIGH);
     
     rightData.pulseTimes.push(0ul);
     leftData.pulseTimes.push(0ul);
@@ -100,6 +119,8 @@ void setup()
     
     attachInterrupt(0, &rightPulse, RISING);
     attachInterrupt(1, &leftPulse, RISING);
+    
+    Serial.begin(9600);
 }
 
 
@@ -131,12 +152,50 @@ void loop()
     leftMotor.run(leftAccel > 0.f ? FORWARD : BACKWARD);
     leftMotor.setSpeed( (unsigned char)fabs(leftAccel) );
     
+    
+    // Update display once every few cycles 
+    if (cycleCount % displayUpdateCycles
+    {
+        char buffer[17];
+        Serial.print("?f?x00?y0");
+    
+        switch (displayMode)
+        {
+        case displayPosition:
+            snprintf(buffer, 17, "RPos: %*.3f m/s", 16, getPosition(rightData));
+            Serial.print(buffer);
+            snprintf(buffer, 17, "LPos: %*.3f m/s", 16, getPosition(leftData));
+            Serial.print(buffer);
+            break;
+        case displayVelocity:
+            snprintf(buffer, 17, "RVel: %*.3f m/s", 16, getVelocity(rightData));
+            Serial.print(buffer);
+            snprintf(buffer, 17, "LVel: %*.3f m/s", 16, getVelocity(leftData));
+            Serial.print(buffer);
+            break;
+        case displayPositionCommand:
+            snprintf(buffer, 17, "RPCmd: %*.3f m/s", 16, rightPositionCommand);
+            Serial.print(buffer);
+            snprintf(buffer, 17, "LPCmd: %*.3f m/s", 16, leftPositionCommand);
+            Serial.print(buffer);
+            break;
+        case displayVelocityCommand:
+            snprintf(buffer, 17, "RVCmd: %*.3f m/s", 16, rightVelocityCommand);
+            Serial.print(buffer);
+            snprintf(buffer, 17, "LVCmd: %*.3f m/s", 16, leftVelocityCommand);
+            Serial.print(buffer);
+            break;
+        }
+    }
+    
+    
     // Limit loop speed to a consistent value to make integration easier
     while (millis() - lastMillis < loopPeriodMs)
     {
     }
     
     lastMillis = millis();
+    ++cycleCount;
 }
 
 
