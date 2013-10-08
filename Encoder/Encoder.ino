@@ -18,11 +18,11 @@ AF_DCMotor leftMotor(4, MOTOR34_1KHZ);
 // Encoder variables
 struct EncoderData
 {
-    EncoderData() { count = 0; direction = 1.f; }
+    EncoderData() { count = 0; }
     void reset() { count = 0; pulseTimes.clear(); pulseTimes.push(0ul); }
     volatile unsigned long count;
     volatile RingBuffer<unsigned long, 6> pulseTimes;
-    float direction;
+    bool forward;
 };
 
 EncoderData rightData;
@@ -38,7 +38,10 @@ void rightPulse()
     if (time - rightData.pulseTimes[0] > debounceMicros)
     {
         rightData.pulseTimes.push(time);
-        rightData.count++;
+		if (rightData.forward)
+            rightData.count++;
+	    else
+		    rightData.count--;
     }
 }
 
@@ -49,7 +52,10 @@ void leftPulse()
     if (time - leftData.pulseTimes[0] > debounceMicros)
     {
         leftData.pulseTimes.push(time);
-        leftData.count++;
+		if (leftData.forward)
+            leftData.count++;
+		else
+		    leftData.count--;
     }
 }
 
@@ -194,8 +200,8 @@ void loop()
         leftMotor.run((leftAccel > 0.f) ? FORWARD : BACKWARD);
         leftMotor.setSpeed( (unsigned char)fabs(leftAccel) );
         
-        rightData.direction = (rightAccel > 0.f) ? 1.f : -1.f;
-        leftData.direction = (leftAccel > 0.f) ? 1.f : -1.f;
+        rightData.forward = rightAccel > 0.f;
+        leftData.forward = leftAccel > 0.f;
         
         // Handle stopping
         if (commandMode == positionMode)
@@ -325,7 +331,7 @@ float getVelocity(EncoderData& data)
      * go to zero when the robot is stationary (no pulses are generated).
      */
     if (newDiff > lastDiff / 4ul)
-        return data.direction * wheelDiameter / ((newDiff * pulsesPerRev) * ticksPerSecond);
+        return data.forward ? 1.0f : -1.0f * wheelDiameter / ((newDiff * pulsesPerRev) / ticksPerSecond);
     else
-        return data.direction * wheelDiameter / (((lastDiff * pulsesPerRev) / 4ul) * ticksPerSecond);
+        return data.forward ? 1.0f : -1.0f * wheelDiameter / (((lastDiff * pulsesPerRev) / 4ul) / ticksPerSecond);
 }
