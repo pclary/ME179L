@@ -7,8 +7,8 @@
 // Pin assignments
 const int rightInterruptPin = 2;
 const int leftInterruptPin = 3;
-const int startPin = 5;
-const int modeChangePin = 6;
+const int startPin = 10;
+const int modeChangePin = 11;
 const int analogPin = 0;
 
 // Initialize motors and LCD screen
@@ -20,7 +20,7 @@ struct EncoderData
 {
     EncoderData() { count = 0; }
     void reset() { count = 0; pulseTimes.clear(); pulseTimes.push(0ul); }
-    volatile unsigned long count;
+    volatile long count;
     volatile RingBuffer<unsigned long, 6> pulseTimes;
     bool forward;
 };
@@ -61,7 +61,7 @@ void leftPulse()
 
 // Physical parameters
 const float wheelDiameter = 0.1f; // meters
-const unsigned long pulsesPerRev = 6 * 25;
+const long pulsesPerRev = 6 * 25;
 const float ticksPerSecond = 1000000.f;
 
 // Function prototypes
@@ -86,12 +86,12 @@ float rightVelInt = 0.f;
 float leftVelInt = 0.f;
 
 // Tuning parameters
-float pl_kp = 1.f;
-float pl_ki = 0.f;
-float pl_kd = 0.f;
-float vl_kp = 1.f;
-float vl_ki = 1.f;
-float vl_kd = 0.f;
+const float pl_kp = 1.f;
+const float pl_ki = 0.f;
+const float pl_kd = 0.f;
+const float vl_kp = 0.01f;
+const float vl_ki = 0.01f;
+const float vl_kd = 0.f;
 
 // Loop control
 unsigned long lastMillis = 0;
@@ -154,6 +154,8 @@ void loop()
         rightData.reset();
         leftData.reset();
         interrupts();
+		rightVelInt = 0;
+		leftVelInt = 0;
     }
     
     startPressed = !temp;
@@ -308,7 +310,7 @@ void loop()
 float getPosition(EncoderData& data)
 {
     noInterrupts();
-    unsigned long count = data.count;
+    long count = data.count;
     interrupts();
     return count * wheelDiameter / pulsesPerRev;
 }
@@ -330,8 +332,8 @@ float getVelocity(EncoderData& data)
      * use it for the velocity calculation instead. This causes the velocity to 
      * go to zero when the robot is stationary (no pulses are generated).
      */
-    if (newDiff > lastDiff / 4ul)
-        return data.forward ? 1.0f : -1.0f * wheelDiameter / ((newDiff * pulsesPerRev) / ticksPerSecond);
+    if (newDiff > lastDiff / 4ul * 2ul)
+        return (data.forward ? 1.0f : -1.0f) * wheelDiameter / ((newDiff * pulsesPerRev) / ticksPerSecond);
     else
-        return data.forward ? 1.0f : -1.0f * wheelDiameter / (((lastDiff * pulsesPerRev) / 4ul) / ticksPerSecond);
+        return (data.forward ? 1.0f : -1.0f) * wheelDiameter / (((lastDiff * pulsesPerRev) / 4ul) / ticksPerSecond);
 }
