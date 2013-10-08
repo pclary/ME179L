@@ -241,25 +241,25 @@ void loop()
     
     
     // Update display once every few cycles 
-    if (cycleCount % displayUpdateCycles)
+    if (cycleCount % displayUpdateCycles == 0)
     {
-        char buffer[17];
-        Serial.print("?f?x00?y0");
+        char buffer[30];
+        Serial.print("?f");
     
         if (commandMode == positionMode)
         {
             if (started || showResults)
             {
-                snprintf(buffer, 17, "RPos: %6.3f m/s", getPosition(rightData));
+                snprintf(buffer, sizeof(buffer), "?x00?y0RPos: %8.3f m", getPosition(rightData));
                 Serial.print(buffer);
-                snprintf(buffer, 17, "LPos: %6.3f m/s", getPosition(leftData));
+                snprintf(buffer, sizeof(buffer), "?x00?y1LPos: %8.3f m", getPosition(leftData));
                 Serial.print(buffer);
             }
             else
             {
-                snprintf(buffer, 17, "RPCmd: %6.3f m/s", rightPositionCommand);
+                snprintf(buffer, sizeof(buffer), "?x00?y0RPCmd: %8.3f m", rightPositionCommand);
                 Serial.print(buffer);
-                snprintf(buffer, 17, "LPCmd: %6.3f m/s", leftPositionCommand);
+                snprintf(buffer, sizeof(buffer), "?x00?y1LPCmd: %8.3f m", leftPositionCommand);
                 Serial.print(buffer);
             }
         }
@@ -267,23 +267,23 @@ void loop()
         {
             if (started)
             {
-                snprintf(buffer, 17, "RVel: %6.3f m/s", getVelocity(rightData));
+                snprintf(buffer, sizeof(buffer), "?x00?y0RVel: %6.3f m/s", getVelocity(rightData));
                 Serial.print(buffer);
-                snprintf(buffer, 17, "LVel: %6.3f m/s", getVelocity(leftData));
+                snprintf(buffer, sizeof(buffer), "?x00?y1LVel: %6.3f m/s", getVelocity(leftData));
                 Serial.print(buffer);
             }
             else if (showResults)
             {
-                snprintf(buffer, 17, "RCnt: %10ul", rightData.count);
+                snprintf(buffer, sizeof(buffer), "?x00?y0RCnt: %10ul", rightData.count);
                 Serial.print(buffer);
-                snprintf(buffer, 17, "LCnt: %10ul", leftData.count);
+                snprintf(buffer, sizeof(buffer), "?x00?y1LCnt: %10ul", leftData.count);
                 Serial.print(buffer);
             }
             else
             {
-                snprintf(buffer, 17, "RVCmd: %6.3f m/s", rightVelocityCommand);
+                snprintf(buffer, sizeof(buffer), "?x00?y0RVCmd: %6.3f m/s", rightVelocityCommand);
                 Serial.print(buffer);
-                snprintf(buffer, 17, "LVCmd: %6.3f m/s", leftVelocityCommand);
+                snprintf(buffer, sizeof(buffer), "?x00?y1LVCmd: %6.3f m/s", leftVelocityCommand);
                 Serial.print(buffer);
             }
         }
