@@ -7,8 +7,6 @@
 // Pin assignments
 const int rightInterruptPin = 2;
 const int leftInterruptPin = 3;
-const int startPin = 10;
-const int modeChangePin = 11;
 const int analogPin = 0;
 
 // Initialize motors and LCD screen
@@ -21,7 +19,7 @@ struct EncoderData
     EncoderData() { count = 0; }
     void reset() { count = 0; pulseTimes.clear(); pulseTimes.push(0ul); }
     volatile long count;
-    volatile RingBuffer<unsigned long, 6> pulseTimes;
+    volatile RingBuffer<unsigned long, 66> pulseTimes;
     bool forward;
 };
 
@@ -35,8 +33,8 @@ const unsigned long allowButtonsTime = 500000; // microseconds
 const unsigned long debounceMicros = 250;
 
 // Physical parameters
-const float wheelDiameter = 0.1f; // meters
-const long pulsesPerRev = 6 * 25;
+const float wheelCircumference = 0.21f; // meters
+const long pulsesPerRev = 6 * 25 * 3;
 const float ticksPerSecond = 1000000.f;
 
 // Function prototypes
@@ -49,9 +47,11 @@ void stopMoving();
 
 // Command variables
 float rightPositionCommand;
-float rightVelocityCommand;
 float leftPositionCommand;
+float rightVelocityCommand;
 float leftVelocityCommand;
+float rightPercentage;
+float leftPercentage;
 enum CommandMode
 {
     positionMode,
@@ -60,17 +60,14 @@ enum CommandMode
 CommandMode commandMode;
 
 // Integral terms
-const float integralThreshold = 255.f;
 float rightVelInt = 0.f;
 float leftVelInt = 0.f;
+const float velIntMax = 0.240f;
 
 // Tuning parameters
 const float pl_kp = 1.f;
-const float pl_ki = 0.f;
-const float pl_kd = 0.f;
-const float vl_kp = 0.01f;
-const float vl_ki = 0.01f;
-const float vl_kd = 0.f;
+const float vl_kp = 1000.f;
+const float vl_ki = 1000.f;
 
 // Loop control
 unsigned long lastMillis = 0;
@@ -82,19 +79,16 @@ const unsigned int displayUpdateCycles = 10;
 bool started = false;
 bool showResults = false;
 unsigned long startedMillis;
-const float positionThreshold = 0.01; // meters
-const float velocityThreshold = 0.01; // m/s
-const unsigned long positionTimeout = 20000; // milliseconds
-const unsigned long velocityRunTime = 5000; // milliseconds
-const float positionMin = -10.f; // meters
-const float positionMax = 10.f; // meters
-const float velocityMin = -1.f; // m/s
-const float velocityMax = 1.f; // m/s
-
-// Button interrupt routines
-const unsigned long debounceMillis = 500;
-unsigned long startReleaseTime = 0;
-unsigned long modeReleaseTime = 0;
+const float positionTolerance = 0.02; // meters
+const float velocityTolerance = 0.02; // m/s
+const unsigned long positionTimeout = 120000; // milliseconds
+const unsigned long velocityRunTime = 10000; // milliseconds
+const float positionMin = -3.f; // meters
+const float positionMax = 3.f; // meters
+const float velocityMin = -0.15f; // m/s
+const float velocityMax = 0.15f; // m/s
+const float percentageMin = 0.f;
+const float percentageMax = 100.f;
 
 
 void setup()
@@ -102,19 +96,15 @@ void setup()
     // Set up pins
     pinMode(rightInterruptPin, INPUT);
     pinMode(leftInterruptPin, INPUT);
-    pinMode(startPin, INPUT);
-    pinMode(modeChangePin, INPUT);
     digitalWrite(rightInterruptPin, HIGH);
     digitalWrite(leftInterruptPin, HIGH);
-    digitalWrite(startPin, HIGH);
-    digitalWrite(modeChangePin, HIGH);
     
     rightData.pulseTimes.push(0ul);
     leftData.pulseTimes.push(0ul);
     
     commandMode = positionMode;
     
-	attachInterrupt(0, &rightPulse, RISING);
+    attachInterrupt(0, &rightPulse, RISING);
     attachInterrupt(1, &leftPulse, RISING);
     
     Serial.begin(9600);
@@ -125,112 +115,65 @@ void loop()
 {
     if (started)
     {
-		if (commandMode == positionMode)
-		{
-			bool rightReached = (rightPositionCommand > 0.f) ? 
-								getPosition(rightData) >= rightPositionCommand :
-								getPosition(rightData) <= rightPositionCommand;
-			bool leftReached = (leftPositionCommand > 0.f) ? 
-								getPosition(leftData) >= leftPositionCommand :
-								getPosition(leftData) <= leftPositionCommand;
-			
-			if (rightPositionCommand > 0.f)
-				rightMotor.run(FORWARD);
-			else
-				rightMotor.run(BACKWARD);
-				
-			if (leftPositionCommand > 0.f)
-				leftMotor.run(FORWARD);
-			else
-				leftMotor.run(BACKWARD);
-				
-			rightMotor.setSpeed(rightReached ? 0 : 255);
-			leftMotor.setSpeed(leftReached ? 0 : 255);
-			
-			if ( rightReached && leftReached )
-				stopMoving();
-			
-			rightData.forward = rightPositionCommand > 0.f;
-			leftData.forward = leftPositionCommand > 0.f;
-		}
-		else // velocityMode
-		{
-			rightMotor.setSpeed( (unsigned char)(fabs(rightVelocityCommand) * 255.f / velocityMax) );
-			leftMotor.setSpeed( (unsigned char)(fabs(leftVelocityCommand) * 255.f / velocityMax) );
-			
-			if (rightVelocityCommand > 0.f)
-				rightMotor.run(FORWARD);
-			else
-				rightMotor.run(BACKWARD);
-				
-			if (leftVelocityCommand > 0.f)
-				leftMotor.run(FORWARD);
-			else
-				leftMotor.run(BACKWARD);
-			
-			if (millis() - startedMillis >= velocityRunTime)
-				stopMoving();
-			
-			rightData.forward = rightVelocityCommand > 0.f;
-			leftData.forward = leftVelocityCommand > 0.f;
-		}
-		
-		/*
-	
-        // Position loop
-        float rightPosErr = rightPositionCommand - getPosition(rightData);
-        float leftPosErr = leftPositionCommand - getPosition(leftData);
-        
         if (commandMode == positionMode)
         {
+            // Use a position feedback loop to control the setpoint of a velocity feedback loop
+        
+            // Position loop
+            float rightPosErr = rightPositionCommand - getPosition(rightData);
+            float leftPosErr = leftPositionCommand - getPosition(leftData);
+        
             rightVelocityCommand = pl_kp * rightPosErr;
             leftVelocityCommand = pl_kp * leftPosErr;
-        }
+            
+            rightVelocityCommand = constrain(rightVelocityCommand, velocityMin, velocityMax);
+            leftVelocityCommand = constrain(leftVelocityCommand, velocityMin, velocityMax);
+            
+            // Velocity loop
+            float rightVelErr = rightVelocityCommand - getVelocity(rightData);
+            float leftVelErr = leftVelocityCommand - getVelocity(leftData);
+            
+            rightVelInt += rightVelErr * (loopPeriodMs / 1000.f);
+            leftVelInt += leftVelErr * (loopPeriodMs / 1000.f);
+            
+            rightVelInt = constrain(rightVelInt, -velIntMax, velIntMax);
+            leftVelInt = constrain(leftVelInt, -velIntMax, velIntMax);
+            
+            float rightAccel = vl_kp * rightVelErr + vl_ki * rightVelInt;
+            float leftAccel = vl_kp * leftVelErr + vl_ki * leftVelInt;
+            
+            rightMotor.run((rightAccel > 0.f) ? FORWARD : BACKWARD);
+            rightMotor.setSpeed( constrain((int)fabs(rightAccel), 0, 255) );
+            leftMotor.run((leftAccel > 0.f) ? FORWARD : BACKWARD);
+            leftMotor.setSpeed( constrain((int)fabs(leftAccel), 0, 255) );
+            
+            rightData.forward = rightAccel > 0.f;
+            leftData.forward = leftAccel > 0.f;
         
-        // Velocity loop
-        float rightVelErr = rightVelocityCommand - getVelocity(rightData);
-        float leftVelErr = leftVelocityCommand - getVelocity(leftData);
-        
-        rightVelInt += rightVelErr * (loopPeriodMs / 1000.f);
-        leftVelInt += leftVelErr * (loopPeriodMs / 1000.f);
-        
-        // Limit integral terms to prevent windup
-        rightVelInt = constrain(rightVelInt, -integralThreshold, integralThreshold);
-        leftVelInt = constrain(leftVelInt, -integralThreshold, integralThreshold);
-        
-        float rightAccel = vl_kp * rightVelErr + vl_ki * rightVelInt;
-        float leftAccel = vl_kp * leftVelErr + vl_ki * leftVelInt;
-        
-        rightMotor.run((rightAccel > 0.f) ? FORWARD : BACKWARD);
-        rightMotor.setSpeed( (unsigned char)fabs(rightAccel) );
-        leftMotor.run((leftAccel > 0.f) ? FORWARD : BACKWARD);
-        leftMotor.setSpeed( (unsigned char)fabs(leftAccel) );
-        
-        rightData.forward = rightAccel > 0.f;
-        leftData.forward = leftAccel > 0.f;
-        
-        // Handle stopping
-        if (commandMode == positionMode)
-        {
             // Stop when close to the target distance with a low speed or after a timeout
-            if ( (fabs(rightPosErr) < positionThreshold && fabs(leftPosErr) < positionThreshold &&
-                  fabs(rightVelErr) < velocityThreshold && fabs(leftVelErr) < velocityThreshold) ||
+            if ( (fabs(rightPosErr) < positionTolerance && fabs(leftPosErr) < positionTolerance &&
+                  fabs(rightVelErr) < velocityTolerance && fabs(leftVelErr) < velocityTolerance) ||
                 millis() - startedMillis >= positionTimeout )
             {
-                started = false;
-                showResults = true;
+                stopMoving();
             }
         }
         else // velocityMode
         {
+            // Give each motor a set PWM speed equal to a percentage of the maximum
+            rightMotor.run(FORWARD);
+            leftMotor.run(FORWARD);
+            
+            rightMotor.setSpeed( (int)(rightPercentage * 2.55f) );
+            leftMotor.setSpeed( (int)(leftPercentage * 2.55f) );
+            
+            rightData.forward = true;
+            leftData.forward = true;
+        
             // Stop after a certain time
             if (millis() - startedMillis >= velocityRunTime)
-            {
-                started = false;
-                showResults = true;
-            }
+                stopMoving();
         }
-		*/
     }
     else
     {
@@ -247,8 +190,8 @@ void loop()
         }
         else // velocityMode
         {
-            rightVelocityCommand = velocityMin + value * (velocityMax - velocityMin);
-            leftVelocityCommand = velocityMin + value * (velocityMax - velocityMin);
+            rightPercentage = percentageMin + value * (percentageMax - percentageMin);
+            leftPercentage = percentageMin + value * (percentageMax - percentageMin);
         }
     }
     
@@ -264,15 +207,19 @@ void loop()
             {
                 Serial.print("?x00?y0RPos: ");
                 Serial.print(getPosition(rightData));
+                Serial.print(" m");
                 Serial.print("?x00?y1LPos: ");
                 Serial.print(getPosition(leftData));
+                Serial.print(" m");
             }
             else
             {
                 Serial.print("?x00?y0RPCmd: ");
                 Serial.print(rightPositionCommand);
+                Serial.print(" m");
                 Serial.print("?x00?y1LPCmd: ");
                 Serial.print(leftPositionCommand);
+                Serial.print(" m");
             }
         }
         else // velocityMode
@@ -280,9 +227,11 @@ void loop()
             if (started)
             {
                 Serial.print("?x00?y0RVel: ");
-                Serial.print(getVelocity(rightData));
+                Serial.print(getVelocity(rightData) * 100.f);
+                Serial.print(" cm/s");
                 Serial.print("?x00?y1LVel: ");
-                Serial.print(getVelocity(leftData));
+                Serial.print(getVelocity(leftData) * 100.f);
+                Serial.print(" cm/s");
             }
             else if (showResults)
             {
@@ -294,9 +243,11 @@ void loop()
             else
             {
                 Serial.print("?x00?y0RVCmd: ");
-                Serial.print(rightVelocityCommand);
+                Serial.print(rightPercentage);
+                Serial.print("%");
                 Serial.print("?x00?y1LVCmd: ");
-                Serial.print(leftVelocityCommand);
+                Serial.print(leftPercentage);
+                Serial.print("%");
             }
         }
     }
@@ -318,21 +269,23 @@ void rightPulse()
     
     if (time - rightData.pulseTimes[0] > debounceMicros)
     {
-		rightData.pulseTimes.push(time);
-		if (rightData.forward)
-			rightData.count++;
-		else
-			rightData.count--;
-		
+        // Update encoder data
+        rightData.pulseTimes.push(time);
+        if (rightData.forward)
+            rightData.count++;
+        else
+            rightData.count--;
+        
+        // Update information input state
         if (time - stoppedTime < allowButtonsTime)
         {
-            stoppedTime = time;
+            startButtonCount = rightData.count;
         }
         else if (!started)
-		{
-			if ( abs(rightData.count - startButtonCount) >= buttonCountThreshold )
-				startMoving();
-		}
+        {
+            if ( abs(rightData.count - startButtonCount) >= buttonCountThreshold )
+                startMoving();
+        }
     }
 }
 
@@ -343,26 +296,30 @@ void leftPulse()
     
     if (time - leftData.pulseTimes[0] > debounceMicros)
     {
+        // Update encoder data
         leftData.pulseTimes.push(time);
-		if (leftData.forward)
+        if (leftData.forward)
             leftData.count++;
-		else
-		    leftData.count--;
-			
-		if (time - stoppedTime < allowButtonsTime)
+        else
+            leftData.count--;
+        
+        // Update information input state
+        if (time - stoppedTime < allowButtonsTime)
         {
-            stoppedTime = time;
+            modeButtonCount = leftData.count;
         }
         else if (!started)
-		{
-			if ( abs(rightData.count - modeButtonCount) >= buttonCountThreshold )
-			{
-				if (showResults)
-					showResults = false;
-				else
-					commandMode = (commandMode == positionMode) ? velocityMode : positionMode;
-			}
-		}
+        {
+            if ( abs(leftData.count - modeButtonCount) >= buttonCountThreshold )
+            {
+                modeButtonCount = leftData.count;
+                
+                if (showResults)
+                    showResults = false;
+                else
+                    commandMode = (commandMode == positionMode) ? velocityMode : positionMode;
+            }
+        }
     }
 }
 
@@ -372,7 +329,7 @@ float getPosition(EncoderData& data)
     noInterrupts();
     long count = data.count;
     interrupts();
-    return count * wheelDiameter / pulsesPerRev;
+    return count * wheelCircumference / pulsesPerRev;
 }
 
 
@@ -383,36 +340,39 @@ float getVelocity(EncoderData& data)
         return 0.f;
     
     noInterrupts();
-    unsigned long lastDiff = data.pulseTimes[0] - data.pulseTimes[4];
+    unsigned long lastDiff = data.pulseTimes[0] - data.pulseTimes[64];
     unsigned long newDiff = micros() - data.pulseTimes[0];
     interrupts();
     
     /**
-     * If the current pulse diff is taking longer than the previous pulse diff, 
-     * use it for the velocity calculation instead. This causes the velocity to 
-     * go to zero when the robot is stationary (no pulses are generated).
+     * If the current pulse diff is taking much longer than the average of the previous diffs, 
+     * use it for the velocity calculation instead. This causes the velocity to go to zero 
+     * when the robot is stationary (no pulses are generated).
      */
-    if (newDiff > lastDiff / 4ul * 2ul)
-        return (data.forward ? 1.0f : -1.0f) * wheelDiameter / ((newDiff * pulsesPerRev) / ticksPerSecond);
+    if (newDiff > lastDiff / 64ul * 2ul)
+        return (data.forward ? 1.0f : -1.0f) * wheelCircumference / ((newDiff * pulsesPerRev) / ticksPerSecond);
     else
-        return (data.forward ? 1.0f : -1.0f) * wheelDiameter / (((lastDiff * pulsesPerRev) / 4ul) / ticksPerSecond);
+        return (data.forward ? 1.0f : -1.0f) * wheelCircumference / (((lastDiff * pulsesPerRev) / 64ul) / ticksPerSecond);
 }
 
 void startMoving()
 {
-	started = true;
+    started = true;
+    showResults = false;
     startedMillis = millis();
     noInterrupts();
     rightData.reset();
     leftData.reset();
     interrupts();
-	rightVelInt = 0;
-	leftVelInt = 0;
+    rightVelInt = 0.f;
+    leftVelInt = 0.f;
 }
 
 void stopMoving()
 {
-	started = false;
+    started = false;
     showResults = true;
-	stoppedTime = micros();
+    stoppedTime = micros();
+    startButtonCount = rightData.count;
+    modeButtonCount = leftData.count;
 }
