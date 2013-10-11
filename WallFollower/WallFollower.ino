@@ -5,8 +5,6 @@
 #define potMeterPin 15
 #define baudrate 9600
 
-#include "screen.h"
-
 int IRvalue = -1;
 int Kp = -1;
 int Ki = -1;
