@@ -2,13 +2,13 @@
 
 #define IRSensor 14
 #define toggleSwitch 11
-#define potMeterPin 15
+#define potMeter 15
 #define baudrate 9600
 
 int IRvalue = -1;
 int Kp = -1;
 int Ki = -1;
-int potMeter = -1;
+
 void setup(){
 	Serial.begin(baudrate);
 	pinMode(toggleSwitch, INPUT);
@@ -16,16 +16,27 @@ void setup(){
 }
 
 void loop(){
-	if(switchPressed){
-		IRvalue = analogRead(IRSensor);
-		printValue("IR:", IRValue);
-		delay(100);
+	if(switchPressed(toggleSwitch)){
+		while(switchPressed(toggleSwitch)){
+			clearScreen();
+			Serial.print("?x00?y0");
+			Serial.print("Release to tune");
+			delay(100);
+		}
+		clearScreen();
+		tuneParameters();
 	} else {
-		potMeter = analogRead(potMeterPin);
-		printValue("Pot:", potMeter);
-		delay(100);
-		
+		clearScreen();
+		Serial.print("?x00?y0");
+		Serial.print("Kp = ");
+		Serial.print("?x05?y0");
+		Serial.print(Kp);
+		Serial.print("?x00?y1");
+		Serial.print("Ki = ");
+		Serial.print("?x05?y1");
+		Serial.print(Ki);
 	}
+	delay(100);
 }
 
 void clearScreen(){
@@ -33,7 +44,8 @@ void clearScreen(){
 }
 
 void putCursor(int x, int y){
-	Serial.print("?x" + x + "?y" + y);
+	String line = "?x" + String(x) + "?y" + String(y);
+	Serial.print(line);
 }
 
 void printValue(String label, int data){
@@ -45,8 +57,42 @@ void printValue(String label, int data){
 }
 
 boolean switchPressed(int button){
-	if !digitalRead(button)
+	if(!digitalRead(button))
 		return true;
 	else
 		return false;
+}
+
+void tuneParameters(){
+	while(!switchPressed(toggleSwitch)){
+		Kp = tune("Kp = ");
+		delay(100);
+	}
+	clearScreen();
+	while(switchPressed(toggleSwitch)){
+		clearScreen();
+		Serial.print("?x00?y0");
+		Serial.print("Release to tune next");
+	}
+	clearScreen();
+	while(!switchPressed(toggleSwitch)){
+		Ki = tune("Ki = ");
+		delay(100);
+	}
+	while(switchPressed(toggleSwitch)){
+		clearScreen();
+		Serial.print("?x00?y0");
+		Serial.print("Release to exit");
+	}
+}
+int tune(String label){
+		clearScreen();
+		Serial.print("?x00?y0");
+		Serial.print("Turn potmeter");
+		Serial.print("?x00?y1");
+		Serial.print(label);
+		Serial.print("?x05?y1");
+		int parameter = analogRead(potMeter);
+		Serial.print(parameter);
+		return parameter;
 }
