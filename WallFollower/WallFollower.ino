@@ -1,4 +1,5 @@
 #include <AFMotor.h>
+#include <Servo.h>
 #include "RingBuffer.h"
 
 #define toggleSwitch 11
@@ -6,30 +7,33 @@
 #define potMeter A1
 #define baudrate 9600
 
+// Motors and servos
+Servo servo;
+
 // Store previous values
 RingBuffer<float, 5> distValues;
 RingBuffer<float, 5> distErrorValues;
 RingBuffer<float, 5> velErrorValues;
 
 // PID tuning constants
-float dist_Kp = 0.f;
+float dist_Kp = 10.f;
 float dist_Ki = 0.f;
 float dist_Kd = 0.f;
-float vel_Kp = 0.f;
+float vel_Kp = 100.f;
 float vel_Ki = 0.f;
 float vel_Kd = 0.f;
 
 // Controller limits
-const float distIntLimit = 1000000.f;
-const float velIntLimit = 1000000.f;
-const float velSetpointLimit = 1.f; // m/s
+float distIntLimit = 1000000.f;
+float velIntLimit = 1000000.f;
+float velSetpointLimit = 1.f; // m/s
 
 // Integral accumulators
 float distErrorInt = 0.f;
 float velErrorInt = 0.f;
 
 // Setpoints
-float distSetpoint = 0.1f; // meters
+float distSetpoint = 0.2f; // meters
 
 // Loop control
 const unsigned int loopPeriodMs = 20;
@@ -38,10 +42,40 @@ unsigned long lastMillis = 0;
 unsigned int cycleCount = 0;
 const unsigned int displayUpdateCycles = 10;
 
+// Steering parameters
+int servoCenter = 65;
+int servoRight = 100;
+int servoLeft = 30;
+
+// Function prototypes
+float getDistance();
+float derivative(RingBuffer<float, 5>& x, float dt);
+
+
+struct Parameter {
+	float* var;
+	const char* name;
+	signed char exponent;
+	float mantissa;
+};
+Parameter params[] = {
+	{ &dist_Kp, "dist_Kp", 0, 0.f },
+	{ &dist_Ki, "dist_Ki", 0, 0.f },
+	{ &dist_Kd, "dist_Kd", 0, 0.f },
+	{ &vel_Kp, "vel_Kp", 0, 0.f },
+	{ &vel_Ki, "vel_Ki", 0, 0.f },
+	{ &vel_Kd, "vel_Kd", 0, 0.f },
+	{ &distIntLimit, "distIntLim", 0, 0.f },
+	{ &velIntLimit, "velIntLim", 0, 0.f },
+	{ &velSetpointLimit, "velSPLim", 0, 0.f },
+	{ &distSetpoint, "distSP", 0, 0.f },
+};
+
 void setup() {
 	Serial.begin(baudrate);
 	pinMode(toggleSwitch, INPUT);
 	digitalWrite(toggleSwitch, HIGH);
+	servo.attach(10);
 }
 
 void loop() {
@@ -58,15 +92,19 @@ void loop() {
     velSetpoint = constrain(velSetpoint, -velSetpointLimit, velSetpointLimit);
     
     // Velocity loop
-    float velError = velSetPoint - derivative(distanceValues, dt);
+    float velError = velSetpoint - derivative(distValues, dt);
     velErrorValues.push(velError);
     
     velErrorInt += velError * dt;
     velErrorInt = constrain(velErrorInt, -velIntLimit, velIntLimit);
     
-    float velSetpoint = vel_Kp * velError + vel_Ki * velErrorInt + vel_Ki * derivative(velErrorValues, dt);
+    float controlValue = vel_Kp * velError + vel_Ki * velErrorInt + vel_Ki * derivative(velErrorValues, dt);
     
+	int servoValue = servoCenter + (int)controlValue;
+	servoValue = constrain(servoValue, servoLeft, servoRight);
+	servo.write(servoValue);
     
+	/*
     // Interface logic
 	if (switchPressed(toggleSwitch)) {
 		while (switchPressed(toggleSwitch)) {
@@ -88,6 +126,7 @@ void loop() {
 		Serial.print("?x05?y1");
 		Serial.print(Ki);
 	}
+	*/
     
     // Limit loop speed to a consistent value to make timing and integration simpler
     while (millis() - lastMillis < loopPeriodMs) {}
@@ -97,8 +136,13 @@ void loop() {
 }
 
 
-float getPosition() {
-    return 0.f;
+float getDistance() {
+    const float c1 = 0.0291f;
+	const float c2 = 0.00076f;
+	
+	float value = analogRead(IRSensor);
+	
+	return 1.f / (value * c1 + c2);
 }
 
 
@@ -135,7 +179,7 @@ bool switchPressed(int button) {
 		return false;
 }
 
-
+/*
 void tuneParameters() {
 	while (!switchPressed(toggleSwitch)) {
 		Kp = tune("Kp = ");
@@ -171,3 +215,4 @@ int tune(String label) {
 		Serial.print(parameter);
 		return parameter;
 }
+*/
