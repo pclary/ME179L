@@ -1,8 +1,11 @@
 #include <AFMotor.h>
 #include <Servo.h>
+#include <cmath>
 #include "RingBuffer.h"
 
-#define toggleSwitch 11
+#define paramSwitch 11
+#define exponentSwitch 12
+#define mantissaSwitch 13
 #define IRSensor A0
 #define potMeter A1
 #define baudrate 9600
@@ -51,25 +54,39 @@ int servoLeft = 30;
 float getDistance();
 float derivative(RingBuffer<float, 5>& x, float dt);
 
-
+// Tuning data structures
 struct Parameter {
 	float* var;
 	const char* name;
-	signed char exponent;
-	float mantissa;
 };
 Parameter params[] = {
-	{ &dist_Kp, "dist_Kp", 0, 0.f },
-	{ &dist_Ki, "dist_Ki", 0, 0.f },
-	{ &dist_Kd, "dist_Kd", 0, 0.f },
-	{ &vel_Kp, "vel_Kp", 0, 0.f },
-	{ &vel_Ki, "vel_Ki", 0, 0.f },
-	{ &vel_Kd, "vel_Kd", 0, 0.f },
-	{ &distIntLimit, "distIntLim", 0, 0.f },
-	{ &velIntLimit, "velIntLim", 0, 0.f },
-	{ &velSetpointLimit, "velSPLim", 0, 0.f },
-	{ &distSetpoint, "distSP", 0, 0.f },
+	{ &dist_Kp, "dist_Kp" },
+	{ &dist_Ki, "dist_Ki" },
+	{ &dist_Kd, "dist_Kd" },
+	{ &vel_Kp, "vel_Kp" },
+	{ &vel_Ki, "vel_Ki" },
+	{ &vel_Kd, "vel_Kd" },
+	{ &distIntLimit, "distIntLim" },
+	{ &velIntLimit, "velIntLim" },
+	{ &velSetpointLimit, "velSPLim" },
+	{ &distSetpoint, "distSP" },
 };
+int currentParam = 0;
+bool switchParamsPressed = false;
+bool setExponentPressed = false;
+bool setMantissaPressed = false;
+enum InterfaceMode {
+    viewMode,
+    exponentMode,
+    mantissaMode,
+};
+InterfaceMode interfaceMode;
+int currentExponent;
+float currentMantissa;
+const int maxExponent = 6;
+const int minExponent -3;
+
+
 
 void setup() {
 	Serial.begin(baudrate);
@@ -100,9 +117,71 @@ void loop() {
     
     float controlValue = vel_Kp * velError + vel_Ki * velErrorInt + vel_Ki * derivative(velErrorValues, dt);
     
+    // Use velocity loop output to control the steering angle
 	int servoValue = servoCenter + (int)controlValue;
 	servoValue = constrain(servoValue, servoLeft, servoRight);
 	servo.write(servoValue);
+    
+    
+    // Handle buttons
+    bool temp = switchPressed(exponentSwitch);
+    
+    if (temp && !paramSwitchPressed) {
+        interfaceMode = viewMode;
+        ++currentParam;
+        currentParam %= sizeof params / sizeof (Parameter);
+    }
+    paramSwitchPressed = temp;
+    
+    if (temp && !exponentSwitchPressed) {
+        if (interfaceMode == exponentMode) {
+            interfaceMode = viewMMode;
+            *params[currentParam].var = currentMantissa * std::pow(10.f, (float)currentExponent);
+        } else {
+            interfaceMode = exponentMode;
+            currentMantissa = *params[currentParam].var / std::pow(10.f, (float)(int)std::log10(*params[currentParam].var));
+        }
+    }
+    exponentSwitchPressed = temp;
+    
+    if (temp && !mantissaSwitchPressed) {
+        if (interfaceMode == mantissaMode) {
+            interfaceMode = mantissaMode;
+            *params[currentParam].var = currentMantissa * std::pow(10.f, (float)currentExponent);
+        } else {
+            interfaceMode = exponentMode;
+            currentExponent = (int)std::log10(*params[currentParam].var);
+        }
+    }
+    mantissaSwitchPressed = temp;
+    
+    // Draw interface
+    if (cycleCount % displayUpdateCycles == 0) {
+        clearScreen();
+        
+        switch (interfaceMode) {
+        case viewMode:
+            break;
+        case exponentMode:
+            currentExponent = minExponent + (int)((long)analogRead(potMeter) * (maxExponent - minExponent) / 1024);
+            putCursor(15, 0);
+            Serial.print("E");
+            break;
+        case mantissaMode:
+            currentMantissa = analogRead(potMeter) / 1024.f;
+            if (currentMantissa < 0.1f) {
+                currentMantissa = 0.f;
+            }
+            putCursor(15, 0);
+            Serial.print("M");
+            break;
+        }
+        
+        putCursor(0, 0);
+        Serial.print(params[currentParam].name);
+        putCursor(0, 1);
+        Serial.print(*params[currentParam].var);
+    }
     
 	/*
     // Interface logic
@@ -173,10 +252,7 @@ void printValue(String label, int data) {
 
 
 bool switchPressed(int button) {
-	if (!digitalRead(button))
-		return true;
-	else
-		return false;
+	return !digitalRead(button)
 }
 
 /*
