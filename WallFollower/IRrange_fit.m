@@ -7,6 +7,8 @@ fitDist = dist(3:20);
 fitDist = 1./fitDist;
 x = [3:20]*1e-2;
 hold on;
-plot(x,fitDist)
+% plot(x,fitDist)
 P = polyfit(x,fitDist,1)
-plot(x,P(2)+P(1).*x,'r')
+plot(x,1./(P(2)+P(1).*x),'r')
+plot(x,23.0779./x,'g')
+plot(x,dist(3:20),'b')
