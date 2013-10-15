@@ -159,13 +159,20 @@ void loop() {
     if (cycleCount % displayUpdateCycles == 0) {
         clearScreen();
         
+        putCursor(0, 0);
+        Serial.print(params[currentParam].name);
+        
         switch (interfaceMode) {
         case viewMode:
+            putCursor(0, 1);
+            Serial.print(*params[currentParam].var);
             break;
         case exponentMode:
             currentExponent = minExponent + (int)((long)analogRead(potMeter) * (maxExponent - minExponent) / 1024);
             putCursor(15, 0);
             Serial.print("E");
+            putCursor(0, 1);
+            Serial.print(currentMantissa * std::pow(10.f, (float)currentExponent));
             break;
         case mantissaMode:
             currentMantissa = analogRead(potMeter) / 1024.f;
@@ -174,13 +181,10 @@ void loop() {
             }
             putCursor(15, 0);
             Serial.print("M");
+            putCursor(0, 1);
+            Serial.print(currentMantissa * std::pow(10.f, (float)currentExponent));
             break;
         }
-        
-        putCursor(0, 0);
-        Serial.print(params[currentParam].name);
-        putCursor(0, 1);
-        Serial.print(*params[currentParam].var);
     }
     
 	/*
