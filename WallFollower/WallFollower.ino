@@ -4,14 +4,19 @@
 #include "RingBuffer.h"
 
 #define paramSwitch 11
-#define exponentSwitch 12
-#define mantissaSwitch 13
+#define exponentSwitch 2
+#define mantissaSwitch 3
 #define IRSensor A0
 #define potMeter A1
+#define photoResistor A2
+#define lineSensor A3
+#define ledPin A5
 #define baudrate 9600
 
 // Motors and servos
 Servo servo;
+AF_DCMotor rightMotor(3, MOTOR34_1KHZ);
+AF_DCMotor leftMotor(4, MOTOR34_1KHZ);
 
 // Store previous values
 RingBuffer<float, 5> distValues;
@@ -19,24 +24,28 @@ RingBuffer<float, 5> distErrorValues;
 RingBuffer<float, 5> velErrorValues;
 
 // PID tuning constants
-float dist_Kp = 10.f;
+float dist_Kp = 6.f;
 float dist_Ki = 0.f;
-float dist_Kd = 0.f;
-float vel_Kp = 100.f;
+float dist_Kd = 1.f;
+float vel_Kp = 60.f;
 float vel_Ki = 0.f;
-float vel_Kd = 0.f;
+float vel_Kd = 5.f;
 
 // Controller limits
-float distIntLimit = 1000000.f;
-float velIntLimit = 1000000.f;
+float distIntLimit = 1000.f;
+float velIntLimit = 1000.f;
 float velSetpointLimit = 1.f; // m/s
 
 // Integral accumulators
 float distErrorInt = 0.f;
 float velErrorInt = 0.f;
 
+// Output filter
+float filteredOutput = 0.f;
+float filterConstant = 0.05f;
+
 // Setpoints
-float distSetpoint = 0.2f; // meters
+float distSetpoint = 0.3f; // meters
 
 // Loop control
 const unsigned int loopPeriodMs = 20;
@@ -54,6 +63,23 @@ int servoLeft = 30;
 float getDistance();
 float derivative(RingBuffer<float, 5>& x, float dt);
 
+// Light sensor
+int photoResistorThreshold = 150;
+
+// Line sensor
+float filteredLineSignal = 0.f;
+float lineFilterConstant = 0.3f;
+float lineRisingThreshold = 700.f;
+float lineFallingThreshold = 500.f;
+int lineCount = 0;
+bool onLine = false;
+int lineCountTarget = 14;
+unsigned long lastLineMillis = 0;
+unsigned long lineTimeout = 1500; // ms
+
+// Debug info
+float distance;
+
 // Tuning data structures
 struct Parameter {
 	float* var;
@@ -70,6 +96,9 @@ Parameter params[] = {
 	{ &velIntLimit, "velIntLim" },
 	{ &velSetpointLimit, "velSPLim" },
 	{ &distSetpoint, "distSP" },
+	{ &filterConstant, "filter_C" },
+	{ &distance, "dist" },
+	{ &filteredLineSignal, "line" },
 };
 int currentParam = 0;
 bool switchParamsPressed = false;
@@ -84,15 +113,35 @@ InterfaceMode interfaceMode;
 int currentExponent;
 float currentMantissa;
 const int maxExponent = 6;
-const int minExponent -3;
-
+const int minExponent = -3;
 
 
 void setup() {
 	Serial.begin(baudrate);
-	pinMode(toggleSwitch, INPUT);
-	digitalWrite(toggleSwitch, HIGH);
+	
+	pinMode(paramSwitch, INPUT);
+	pinMode(exponentSwitch, INPUT);
+	pinMode(mantissaSwitch, INPUT);
+	pinMode(photoResistor, INPUT);
+	pinMode(lineSensor, INPUT);
+	pinMode(ledPin, OUTPUT);
+	
+	digitalWrite(paramSwitch, HIGH);
+	digitalWrite(exponentSwitch, HIGH);
+	digitalWrite(mantissaSwitch, HIGH);
+	digitalWrite(photoResistor, HIGH);
+	digitalWrite(lineSensor, HIGH);
+	digitalWrite(ledPin, LOW);
+	
 	servo.attach(10);
+	
+	// Wait for start light
+	while(analogRead(photoResistor) > photoResistorThreshold) {}
+	
+	rightMotor.setSpeed(255);
+	leftMotor.setSpeed(255);
+	rightMotor.run(FORWARD);
+	leftMotor.run(FORWARD);
 }
 
 void loop() {
@@ -101,6 +150,7 @@ void loop() {
     distValues.push(getDistance());
     float distError = distSetpoint - distValues[0];
     distErrorValues.push(distError);
+	distance = distValues[0];
     
     distErrorInt += distError * dt;
     distErrorInt = constrain(distErrorInt, -distIntLimit, distIntLimit);
@@ -117,99 +167,106 @@ void loop() {
     
     float controlValue = vel_Kp * velError + vel_Ki * velErrorInt + vel_Ki * derivative(velErrorValues, dt);
     
+	filteredOutput = filteredOutput * (1.f - filterConstant) + controlValue * filterConstant;
+	
     // Use velocity loop output to control the steering angle
-	int servoValue = servoCenter + (int)controlValue;
+	int servoValue = servoCenter + (int)filteredOutput;
 	servoValue = constrain(servoValue, servoLeft, servoRight);
 	servo.write(servoValue);
     
     
     // Handle buttons
-    bool temp = switchPressed(exponentSwitch);
+    bool temp = switchPressed(paramSwitch);
     
-    if (temp && !paramSwitchPressed) {
+    if (temp && !switchParamsPressed) {
         interfaceMode = viewMode;
         ++currentParam;
         currentParam %= sizeof params / sizeof (Parameter);
     }
-    paramSwitchPressed = temp;
-    
-    if (temp && !exponentSwitchPressed) {
+    switchParamsPressed = temp;
+	
+	temp = switchPressed(exponentSwitch);
+    if (temp && !setExponentPressed) {
         if (interfaceMode == exponentMode) {
-            interfaceMode = viewMMode;
-            *params[currentParam].var = currentMantissa * std::pow(10.f, (float)currentExponent);
+            interfaceMode = viewMode;
+            *params[currentParam].var = currentMantissa * pow(10.f, (float)currentExponent);
         } else {
             interfaceMode = exponentMode;
-            currentMantissa = *params[currentParam].var / std::pow(10.f, (float)(int)std::log10(*params[currentParam].var));
+            currentMantissa = *params[currentParam].var / pow(10.f, (float)(int)log10(*params[currentParam].var));
         }
     }
-    exponentSwitchPressed = temp;
+    setExponentPressed = temp;
     
-    if (temp && !mantissaSwitchPressed) {
+	temp = switchPressed(mantissaSwitch);
+    if (temp && !setMantissaPressed) {
         if (interfaceMode == mantissaMode) {
-            interfaceMode = mantissaMode;
-            *params[currentParam].var = currentMantissa * std::pow(10.f, (float)currentExponent);
+            interfaceMode = viewMode;
+            *params[currentParam].var = currentMantissa * pow(10.f, (float)currentExponent);
         } else {
-            interfaceMode = exponentMode;
-            currentExponent = (int)std::log10(*params[currentParam].var);
+            interfaceMode = mantissaMode;
+            currentExponent = (int)log10(*params[currentParam].var);
         }
     }
-    mantissaSwitchPressed = temp;
+    setMantissaPressed = temp;
     
     // Draw interface
     if (cycleCount % displayUpdateCycles == 0) {
         clearScreen();
-        
-        putCursor(0, 0);
+		
+		Serial.print("?x00?y0");
         Serial.print(params[currentParam].name);
         
         switch (interfaceMode) {
         case viewMode:
-            putCursor(0, 1);
-            Serial.print(*params[currentParam].var);
+			Serial.print("?x00?y1");
+			Serial.print(*params[currentParam].var);
             break;
         case exponentMode:
             currentExponent = minExponent + (int)((long)analogRead(potMeter) * (maxExponent - minExponent) / 1024);
-            putCursor(15, 0);
+            Serial.print("?x15?y0");
             Serial.print("E");
-            putCursor(0, 1);
-            Serial.print(currentMantissa * std::pow(10.f, (float)currentExponent));
+			Serial.print("?x00?y1");
+			Serial.print(currentMantissa * pow(10.f, (float)currentExponent));
             break;
         case mantissaMode:
-            currentMantissa = analogRead(potMeter) / 1024.f;
+            currentMantissa = analogRead(potMeter) / 1023.f;
             if (currentMantissa < 0.1f) {
                 currentMantissa = 0.f;
             }
-            putCursor(15, 0);
+            Serial.print("?x15?y0");
             Serial.print("M");
-            putCursor(0, 1);
-            Serial.print(currentMantissa * std::pow(10.f, (float)currentExponent));
+			Serial.print("?x00?y1");
+			Serial.print(currentMantissa * pow(10.f, (float)currentExponent));
             break;
         }
     }
-    
-	/*
-    // Interface logic
-	if (switchPressed(toggleSwitch)) {
-		while (switchPressed(toggleSwitch)) {
-			clearScreen();
-			Serial.print("?x00?y0");
-			Serial.print("Release to tune");
-			delay(100);
+	
+	// Sense lines
+	filteredLineSignal = filteredLineSignal * (1.f - lineFilterConstant) + 
+						 analogRead(lineSensor) * lineFilterConstant;
+						 
+	if (filteredLineSignal > lineRisingThreshold && 
+		!onLine && 
+		millis() - lastLineMillis > lineTimeout) {
+		
+		++lineCount;
+			
+		if (lineCount >= lineCountTarget) {
+			// Stop moving
+			rightMotor.run(RELEASE);
+			leftMotor.run(RELEASE);
 		}
-		clearScreen();
-		tuneParameters();
-	} else {
-		clearScreen();
-		Serial.print("?x00?y0");
-		Serial.print("Kp = ");
-		Serial.print("?x05?y0");
-		Serial.print(Kp);
-		Serial.print("?x00?y1");
-		Serial.print("Ki = ");
-		Serial.print("?x05?y1");
-		Serial.print(Ki);
+		
+		onLine = true;
 	}
-	*/
+	
+	if (filteredLineSignal < lineFallingThreshold && onLine) {
+		onLine = false;
+		lastLineMillis = millis();
+	}
+	
+	digitalWrite(ledPin, onLine);
+	
     
     // Limit loop speed to a consistent value to make timing and integration simpler
     while (millis() - lastMillis < loopPeriodMs) {}
@@ -239,60 +296,6 @@ void clearScreen() {
 	Serial.print("?f");
 }
 
-
-void putCursor(int x, int y) {
-	String line = "?x" + String(x) + "?y" + String(y);
-	Serial.print(line);
-}
-
-
-void printValue(String label, int data) {
-	clearScreen();
-	putCursor(0,0);
-	Serial.print(label);
-	putCursor(label.length(),0);//intentional +1 for spacing
-	Serial.print(data);
-}
-
-
 bool switchPressed(int button) {
-	return !digitalRead(button)
+	return !digitalRead(button);
 }
-
-/*
-void tuneParameters() {
-	while (!switchPressed(toggleSwitch)) {
-		Kp = tune("Kp = ");
-		delay(100);
-	}
-	clearScreen();
-	while (switchPressed(toggleSwitch)) {
-		clearScreen();
-		Serial.print("?x00?y0");
-		Serial.print("Release to tune next");
-	}
-	clearScreen();
-	while (!switchPressed(toggleSwitch)) {
-		Ki = tune("Ki = ");
-		delay(100);
-	}
-	while (switchPressed(toggleSwitch)) {
-		clearScreen();
-		Serial.print("?x00?y0");
-		Serial.print("Release to exit");
-	}
-}
-
-
-int tune(String label) {
-		clearScreen();
-		Serial.print("?x00?y0");
-		Serial.print("Turn potmeter");
-		Serial.print("?x00?y1");
-		Serial.print(label);
-		Serial.print("?x05?y1");
-		int parameter = analogRead(potMeter);
-		Serial.print(parameter);
-		return parameter;
-}
-*/
