@@ -9,7 +9,8 @@
 #define IRSensor A0
 #define potMeter A1
 #define photoResistor A2
-#define lineSensor A3
+#define lineSensor1 A3
+#define lineSensor2 A4
 #define ledPin A5
 #define baudrate 9600
 
@@ -67,14 +68,19 @@ float derivative(RingBuffer<float, 5>& x, float dt);
 int photoResistorThreshold = 150;
 
 // Line sensor
-float filteredLineSignal = 0.f;
+float filteredLineSignal1 = 0.f;
+float filteredLineSignal2 = 0.f;
 float lineFilterConstant = 0.3f;
-float lineRisingThreshold = 700.f;
+float lineRisingThreshold = 625.f;
 float lineFallingThreshold = 500.f;
 int lineCount = 0;
-bool onLine = false;
+bool onLine1 = false;
+bool onLine2 = false;
 int lineCountTarget = 14;
-unsigned long lastLineMillis = 0;
+unsigned long lastLineMillisBoth = 0;
+unsigned long lastLineMillis1 = 0;
+unsigned long lastLineMillis2 = 0;
+unsigned long lineWindow = 1000; // ms
 unsigned long lineTimeout = 1500; // ms
 
 // Debug info
@@ -98,7 +104,6 @@ Parameter params[] = {
 	{ &distSetpoint, "distSP" },
 	{ &filterConstant, "filter_C" },
 	{ &distance, "dist" },
-	{ &filteredLineSignal, "line" },
 };
 int currentParam = 0;
 bool switchParamsPressed = false;
@@ -123,14 +128,16 @@ void setup() {
 	pinMode(exponentSwitch, INPUT);
 	pinMode(mantissaSwitch, INPUT);
 	pinMode(photoResistor, INPUT);
-	pinMode(lineSensor, INPUT);
+	pinMode(lineSensor1, INPUT);
+	pinMode(lineSensor2, INPUT);
 	pinMode(ledPin, OUTPUT);
 	
 	digitalWrite(paramSwitch, HIGH);
 	digitalWrite(exponentSwitch, HIGH);
 	digitalWrite(mantissaSwitch, HIGH);
 	digitalWrite(photoResistor, HIGH);
-	digitalWrite(lineSensor, HIGH);
+	digitalWrite(lineSensor1, HIGH);
+	digitalWrite(lineSensor2, HIGH);
 	digitalWrite(ledPin, LOW);
 	
 	servo.attach(10);
@@ -242,30 +249,48 @@ void loop() {
     }
 	
 	// Sense lines
-	filteredLineSignal = filteredLineSignal * (1.f - lineFilterConstant) + 
-						 analogRead(lineSensor) * lineFilterConstant;
-						 
-	if (filteredLineSignal > lineRisingThreshold && 
-		!onLine && 
-		millis() - lastLineMillis > lineTimeout) {
-		
-		++lineCount;
-			
-		if (lineCount >= lineCountTarget) {
-			// Stop moving
-			rightMotor.run(RELEASE);
-			leftMotor.run(RELEASE);
+	filteredLineSignal1 = filteredLineSignal1 * (1.f - lineFilterConstant) + 
+						 analogRead(lineSensor1) * lineFilterConstant;
+	filteredLineSignal2 = filteredLineSignal2 * (1.f - lineFilterConstant) + 
+						 analogRead(lineSensor2) * lineFilterConstant;
+	
+	bool risingEdge = false;
+	
+	if (filteredLineSignal1 > lineRisingThreshold && !onLine1) {
+		onLine1 = true;
+		lastLineMillis1 = millis();
+		if (millis() - lastLineMillis2 < lineWindow && 
+			millis() - lastLineMillisBoth > lineTimeout) {
+			lineCount++;
+			lastLineMillisBoth = millis();
 		}
-		
-		onLine = true;
+	}
+	if (filteredLineSignal2 > lineRisingThreshold && !onLine2) {
+		onLine2 = true;
+		lastLineMillis2 = millis();
+		if (millis() - lastLineMillis1 < lineWindow && 
+			millis() - lastLineMillisBoth > lineTimeout) {
+			lineCount++;
+			lastLineMillisBoth = millis();
+		}
 	}
 	
-	if (filteredLineSignal < lineFallingThreshold && onLine) {
-		onLine = false;
-		lastLineMillis = millis();
+	if (filteredLineSignal1 < lineFallingThreshold && onLine1) {
+		onLine1 = false;
+		lastLineMillis1 = millis();
+	}
+	if (filteredLineSignal2 < lineFallingThreshold && onLine2) {
+		onLine2 = false;
+		lastLineMillis2 = millis();
 	}
 	
-	digitalWrite(ledPin, onLine);
+	if (lineCount >= lineCountTarget) {
+		// Stop moving
+		rightMotor.run(RELEASE);
+		leftMotor.run(RELEASE);
+	}
+	
+	digitalWrite(ledPin, millis() - lastLineMillisBoth < 500);
 	
     
     // Limit loop speed to a consistent value to make timing and integration simpler
