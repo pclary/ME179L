@@ -18,8 +18,10 @@ private:
     float kp;
     float ki;
     float kd;
+	float outputMin;
+	float outputMax;
     
-    float derivative(RingBuffer<float, 5>& x, float dt);
-}
+    float derivative(RingBuffer<float, 5>& x);
+};
 
 #endif // CONTROLLOOP_H
