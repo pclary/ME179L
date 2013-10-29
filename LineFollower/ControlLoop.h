@@ -10,7 +10,7 @@ public:
     ControlLoop(float dt);
     void setTuning(float kp, float ki, float kd);
     void setOutputLimits(float min, float max);
-    float update(float error);
+    float update(float error, float feedForward = 0.f);
     
 private:
     RingBuffer<float, 5> errorValues;

@@ -23,14 +23,14 @@ void ControlLoop::setOutputLimits(float min, float max)
 }
 
 
-float ControlLoop::update(float error)
+float ControlLoop::update(float error, float feedForward)
 {
     float tempErrorIntegral = errorIntegral + error * dt;
     
     errorValues.push(error);
     float errorDerivative = derivative(errorValues);
     
-    float control = kp * error + ki * tempErrorIntegral + kd * errorDerivative;
+    float control = feedForward + kp * error + ki * tempErrorIntegral + kd * errorDerivative;
     
     // Don't integrate if the output is pinned at the limits
     if ( !(control > outputMax && error > 0.f) &&
