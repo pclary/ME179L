@@ -319,7 +319,7 @@ void doStateAction(State st)
         else if (leftLineSensor.detected())
             driveAndTurn(0.3f, 0.4f);
         else
-            driveStraight(-0.2f);
+            driveAndTurn(0.3f, movingRight? -0.1f : 0.1f);
         break;
 	}
 }
