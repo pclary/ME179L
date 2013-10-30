@@ -68,16 +68,7 @@ LineSensor leftLineSensor(leftLineSensorPin);
 enum State
 {   
     state_0,
-	state_1a,
-    state_1b,
-    state_1c,
-	state_1d,
-    state_2a,
-	state_2b,
-    state_3a,
-    state_3b,
-    state_3c,
-    state_3d,
+	state_1,
 };
 State state = state_0;
 float rightRelativePositionBase = 0.f;
@@ -314,8 +305,6 @@ void updateVelocityLoop()
 
 void doStateAction(State st)
 {
-    const float speed = 0.2f;
-    const float slowSpeed = 0.1f;
 
 	switch (st)
 	{
@@ -323,37 +312,14 @@ void doStateAction(State st)
         driveStraight(0.f);
         break;
 	case state_1a:
-        driveStraight(speed);
-        break;
-	case state_1b:
-        driveAndTurn(speed, movingRight ? -0.28f : 0.28f);
-        break;
-	case state_1c:
-        driveStraight(speed);
-        break;
-	case state_1d:
-        if (rightLineSensor.detected())
-            driveAndTurn(slowSpeed, -0.3f);
+        if (rightLineSensor.detected() && leftLineSensor.detected())
+            driveStraight(0.3f);
+        else if (rightLineSensor.detected())
+            driveAndTurn(0.3f, -0.4f);
+        else if (leftLineSensor.detected())
+            driveAndTurn(0.3f, 0.4f);
         else
-            driveAndTurn(slowSpeed, 0.3f);
-        break;
-	case state_2a:
-		driveStraight(speed);
-		break;
-	case state_2b:
-		driveAndTurn(speed, movingRight ? -0.2f : 0.2f);
-		break;
-	case state_3a:
-        driveStraight(speed);
-		break;
-	case state_3b:
-        driveStraight(-speed);
-        break;
-	case state_3c:
-        turnInPlace( (movingRight ? -slowSpeed : slowSpeed) / wheelOffset );
-        break;
-	case state_3d:
-        driveStraight(-speed);
+            driveStraight(-0.2f);
         break;
 	}
 }
@@ -373,82 +339,7 @@ State stateTransition(State oldState)
 		}
         break;
 	case state_1a:
-        if (getRelativeDistance() > 0.03f)
-		{
-            newState = state_1b;
-		}
-        break;
-	case state_1b:
-        if (fabs(getRelativeAngle()) > 55.f)
-		{
-            newState = state_1c;
-			resetRelativeBase();
-		}
-        break;
-	case state_1c:
-        if (rightLineSensor.detected() && getRelativeDistance() > 0.25f)
-		{
-            newState = state_1d;
-			resetRelativeBase();
-		}
-        break;
-	case state_1d:
-        if (tripCount >= 2 && getRelativeDistance() > 0.7f)
-		{
-            newState = state_0;
-		}
-        else if (getRelativeDistance() > 1.0f && !rightLineSensor.detected())
-		{
-            newState = state_2a;
-			resetRelativeBase();
-		}
-        break;
-	case state_2a:
-		if (!startRight && tripCount == 1 && getRelativeDistance() > 0.85f)
-		{
-			newState = state_2b;
-			resetRelativeBase();
-		}
-        else if (getRelativeDistance() > 0.95f)
-		{
-            newState = state_2b;
-			resetRelativeBase();
-		}
-        break;
-	case state_2b:
-        if (fabs(getRelativeAngle()) > 75.f)
-		{
-			newState = state_3a;
-		}
-		break;
-	case state_3a:
-        if (!digitalRead(bumpSensorPin))
-		{
-            newState = state_3b;
-			resetRelativeBase();
-		}
-        break;
-	case state_3b:
-        if (getRelativeDistance() < -0.01f)
-		{
-            newState = state_3c;
-		}
-        break;
-	case state_3c:
-        if (fabs(getRelativeAngle()) > 155.f)
-		{
-            newState = state_3d;
-			resetRelativeBase();
-		}
-        break;
-	case state_3d:
-        if (getRelativeDistance() < -0.25f)
-        {
-            newState = state_1a;
-			resetRelativeBase();
-            movingRight = !movingRight;
-            tripCount++;
-        }
+        
         break;
 	}
 		
@@ -480,7 +371,7 @@ void resetRelativeBase()
 
 float feedForward(float velocity)
 {
-	const float epsilon = 0.02;
+	const float epsilon = 0.02f;
 	if (fabs(velocity) < epsilon)
 		return 0.f;
 		
