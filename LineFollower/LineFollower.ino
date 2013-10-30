@@ -30,7 +30,6 @@ struct EncoderData
     float filteredVelocity;
     static const float filterConstant = 0.15f;
 };
-
 EncoderData rightData;
 EncoderData leftData;
 const unsigned long debounceMicros = 250;
@@ -67,8 +66,9 @@ LineSensor leftLineSensor(leftLineSensorPin);
 // State machine
 enum State
 {   
-    state_0,
-	state_1,
+    state_wait,
+    state_lineFollow,
+    state_turn,
 };
 State state = state_0;
 float rightRelativePositionBase = 0.f;
@@ -109,7 +109,7 @@ void setup()
     
     attachInterrupt(0, &rightPulse, RISING);
     attachInterrupt(1, &leftPulse, RISING);
-	
+    
     rightVelocityLoop.setTuning(400.f, 1500.f, 100.f);
     leftVelocityLoop.setTuning(400.f, 1500.f, 100.f);
     rightVelocityLoop.setOutputLimits(-255.f, 255.f);
@@ -125,47 +125,47 @@ void setup()
         delay(1);
     }
     
-	measuredDist = dist / 100ul;
+    measuredDist = dist / 100ul;
     movingRight = measuredDist < 150;
-	startRight = !movingRight;
+    startRight = !movingRight;
 }
 
 
 void loop()
 {
-	rightLineSensor.update();
-	leftLineSensor.update();
-	
-	doStateAction(state);
-	state = stateTransition(state);
-	
+    rightLineSensor.update();
+    leftLineSensor.update();
+    
+    doStateAction(state);
+    state = stateTransition(state);
+    
     updateVelocityLoop();
     
     // Update display
     if (cycleCount % displayUpdateCycles == 0)
     {
-		Serial.print("?f");
-		Serial.print("?x00?y0");
-		
-		if (state == state_0)
-		{
-			if (movingRight)
-				Serial.write("Starting left");
-			else
-				Serial.write("Starting right");
-			Serial.print("?x00?y1");
-			Serial.print(measuredDist);
-		}
-		else
-		{
-			Serial.print(leftLineSensor.lineFilter);
-			Serial.print("?x08?y0");
-			Serial.print(rightLineSensor.lineFilter);
-			Serial.print("?x00?y1");
-			Serial.print(getRelativeDistance());
-			Serial.print("?x08?y1");
-			Serial.print(state);
-		}
+        Serial.print("?f");
+        Serial.print("?x00?y0");
+        
+        if (state == state_0)
+        {
+            if (movingRight)
+                Serial.write("Starting left");
+            else
+                Serial.write("Starting right");
+            Serial.print("?x00?y1");
+            Serial.print(measuredDist);
+        }
+        else
+        {
+            Serial.print(leftLineSensor.lineFilter);
+            Serial.print("?x08?y0");
+            Serial.print(rightLineSensor.lineFilter);
+            Serial.print("?x00?y1");
+            Serial.print(getRelativeDistance());
+            Serial.print("?x08?y1");
+            Serial.print(state);
+        }
     }
     
     // Limit loop speed to a consistent value to make timing and integration simpler
@@ -255,28 +255,28 @@ float getVelocity(EncoderData& data)
 
 void driveStraight(float speed)
 {
-	rightVelocityCommand = speed;
-	leftVelocityCommand = speed;
+    rightVelocityCommand = speed;
+    leftVelocityCommand = speed;
 }
 
 
 void driveAndTurn(float speed, float radius)
 {
-	rightVelocityCommand = speed * (radius + wheelOffset) / radius;
-	leftVelocityCommand = speed * (radius - wheelOffset) / radius;
+    rightVelocityCommand = speed * (radius + wheelOffset) / radius;
+    leftVelocityCommand = speed * (radius - wheelOffset) / radius;
 }
 
 
 void turnInPlace(float angularVelocity)
 {
-	rightVelocityCommand = wheelOffset * angularVelocity;
-	leftVelocityCommand = -wheelOffset * angularVelocity;
+    rightVelocityCommand = wheelOffset * angularVelocity;
+    leftVelocityCommand = -wheelOffset * angularVelocity;
 }
 
 
 void updateVelocityLoop()
 {
-	updateVelocity(rightData);
+    updateVelocity(rightData);
     updateVelocity(leftData);
 
     // Velocity control
@@ -292,13 +292,13 @@ void updateVelocityLoop()
     rightMotor.setSpeed( (int)fabs(rightControlFilter) );
     leftMotor.run((leftControlFilter > 0.f) ? FORWARD : BACKWARD);
     leftMotor.setSpeed( (int)fabs(leftControlFilter) );
-	
-	rightControlFilter2 = rightControlFilter2 * (1.f - controlFilterConstant2) +
-                         rightControl * controlFilterConstant2;
+    
+    rightControlFilter2 = rightControlFilter2 * (1.f - controlFilterConstant2) +
+                          rightControl * controlFilterConstant2;
     leftControlFilter2 = leftControlFilter2 * (1.f - controlFilterConstant2) +
-                        leftControl * controlFilterConstant2;
-	
-	rightData.forward = rightControlFilter2 > 0.f;
+                         leftControl * controlFilterConstant2;
+    
+    rightData.forward = rightControlFilter2 > 0.f;
     leftData.forward = leftControlFilter2 > 0.f;
 }
 
@@ -306,12 +306,12 @@ void updateVelocityLoop()
 void doStateAction(State st)
 {
 
-	switch (st)
-	{
-	case state_0:
+    switch (st)
+    {
+    case state_wait:
         driveStraight(0.f);
         break;
-	case state_1a:
+    case state_lineFollow:
         if (rightLineSensor.detected() && leftLineSensor.detected())
             driveStraight(0.3f);
         else if (rightLineSensor.detected())
@@ -321,35 +321,50 @@ void doStateAction(State st)
         else
             driveAndTurn(0.3f, movingRight? -0.1f : 0.1f);
         break;
-	}
+    case state_lineFollow:
+        turnInPlace(2.f);
+        break;
+    }
 }
 
 
 State stateTransition(State oldState)
 {
-	State newState = oldState;
-	
-	switch (oldState)
-	{
-	case state_0:
+    State newState = oldState;
+    
+    switch (oldState)
+    {
+    case state_wait:
         if (!digitalRead(bumpSensorPin))
-		{
-            newState = state_1a;
-			resetRelativeBase();
-		}
+        {
+            newState = state_lineFollow;
+            resetRelativeBase();
+        }
         break;
-	case state_1a:
+    case state_lineFollow:
+        if (!digitalRead(bumpSensorPin))
+        {
+            newState = state_turn;
+            resetRelativeBase();
+        }
+        break;
+    case state_turn:
+        if (fabs(getRelativeAngle) > 160.f)
+        {
+            newState = state_lineFollow;
+            resetRelativeBase();
+            ++tripCount;
+        }
+        break;
+    }
         
-        break;
-	}
-		
-	return newState;
+    return newState;
 }
 
 
 float getRelativeDistance()
 {
-	return (getPosition(rightData) - rightRelativePositionBase + 
+    return (getPosition(rightData) - rightRelativePositionBase + 
             getPosition(leftData) - leftRelativePositionBase) * 0.5f ;
 }
 
@@ -357,23 +372,23 @@ float getRelativeDistance()
 float getRelativeAngle()
 {
     const float rad2deg = 57.2958f;
-	return ((getPosition(rightData) - rightRelativePositionBase) - 
+    return ((getPosition(rightData) - rightRelativePositionBase) - 
             (getPosition(leftData) - leftRelativePositionBase)) / (2.f * wheelOffset) * rad2deg;
 }
 
 
 void resetRelativeBase()
 {
-	rightRelativePositionBase = getPosition(rightData);
-	leftRelativePositionBase = getPosition(leftData);
+    rightRelativePositionBase = getPosition(rightData);
+    leftRelativePositionBase = getPosition(leftData);
 }
 
 
 float feedForward(float velocity)
 {
-	const float epsilon = 0.02f;
-	if (fabs(velocity) < epsilon)
-		return 0.f;
-		
-	return 54.45f * exp(3.237f * velocity);
+    const float epsilon = 0.02f;
+    if (fabs(velocity) < epsilon)
+        return 0.f;
+        
+    return 54.45f * exp(3.237f * velocity);
 }
