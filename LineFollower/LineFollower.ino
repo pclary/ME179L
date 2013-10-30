@@ -1,6 +1,7 @@
 #include <AFMotor.h>
 #include "RingBuffer.h"
 #include "ControlLoop.h"
+#include "LineSensor.h"
 #include <cmath>
 #include <cstdio>
 
@@ -9,7 +10,8 @@
 const int rightInterruptPin = 2;
 const int leftInterruptPin = 3;
 const int potentiometerPin = A0;
-const int lineSensorPin = A1;
+const int rightLineSensorPin = A1;
+const int leftLineSensorPin = A4;
 const int distanceSensorPin = A2;
 const int bumpSensorPin = A3;
 
@@ -59,11 +61,8 @@ float leftControlFilter2 = 0.f;
 const float controlFilterConstant2 = 0.1f;
 
 // Line detection
-const float lineRisingThreshold = 300.f;
-const float lineFallingThreshold = 200.f;
-float lineFilter = 0.f;
-const float lineFilterConstant = 0.3f;
-bool lineDetected = false;
+LineSensor rightLineSensor(rightLineSensorPin);
+LineSensor leftLineSensor(leftLineSensorPin);
 
 // State machine
 enum State
@@ -116,7 +115,6 @@ void setup()
     digitalWrite(rightInterruptPin, HIGH);
     digitalWrite(leftInterruptPin, HIGH);
     digitalWrite(bumpSensorPin, HIGH);
-	digitalWrite(lineSensorPin, HIGH);
     
     attachInterrupt(0, &rightPulse, RISING);
     attachInterrupt(1, &leftPulse, RISING);
@@ -144,7 +142,8 @@ void setup()
 
 void loop()
 {
-	updateLineDetection();
+	rightLineSensor.update();
+	leftLineSensor.update();
 	
 	doStateAction(state);
 	state = stateTransition(state);
@@ -168,9 +167,9 @@ void loop()
 		}
 		else
 		{
-			Serial.print(lineFilter);
+			Serial.print(leftLineSensor.lineFilter);
 			Serial.print("?x08?y0");
-			Serial.print(getRelativeAngle());
+			Serial.print(rightLineSensor.lineFilter);
 			Serial.print("?x00?y1");
 			Serial.print(getRelativeDistance());
 			Serial.print("?x08?y1");
@@ -313,18 +312,6 @@ void updateVelocityLoop()
 }
 
 
-void updateLineDetection()
-{
-	lineFilter = lineFilter * (1.f - lineFilterConstant) + analogRead(lineSensorPin) * lineFilterConstant;
-	
-	if (!lineDetected && lineFilter > lineRisingThreshold)
-		lineDetected = true;
-		
-	if (lineDetected && lineFilter < lineFallingThreshold)
-		lineDetected = false;
-}
-
-
 void doStateAction(State st)
 {
     const float speed = 0.2f;
@@ -345,7 +332,7 @@ void doStateAction(State st)
         driveStraight(speed);
         break;
 	case state_1d:
-        if (lineDetected)
+        if (rightLineSensor.detected())
             driveAndTurn(slowSpeed, -0.3f);
         else
             driveAndTurn(slowSpeed, 0.3f);
@@ -399,7 +386,7 @@ State stateTransition(State oldState)
 		}
         break;
 	case state_1c:
-        if (lineDetected && getRelativeDistance() > 0.25f)
+        if (rightLineSensor.detected() && getRelativeDistance() > 0.25f)
 		{
             newState = state_1d;
 			resetRelativeBase();
@@ -410,7 +397,7 @@ State stateTransition(State oldState)
 		{
             newState = state_0;
 		}
-        else if (getRelativeDistance() > 1.0f && !lineDetected)
+        else if (getRelativeDistance() > 1.0f && !rightLineSensor.detected())
 		{
             newState = state_2a;
 			resetRelativeBase();
