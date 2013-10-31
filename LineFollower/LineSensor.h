@@ -12,8 +12,8 @@ public:
 	bool detected() { return lineDetected; }
     
 //private:
-	static const float lineRisingThreshold = 300.f;
-	static const float lineFallingThreshold = 200.f;
+	static const float lineRisingThreshold = 400.f;
+	static const float lineFallingThreshold = 300.f;
 	static const float lineFilterConstant = 0.3f;
 	
 	int pin;

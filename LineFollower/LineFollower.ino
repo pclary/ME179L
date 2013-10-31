@@ -12,8 +12,10 @@ const int leftInterruptPin = 3;
 const int potentiometerPin = A0;
 const int rightLineSensorPin = A1;
 const int leftLineSensorPin = A4;
+const int farLeftLineSensorPin = A3;
+const int farRightLineSensorPin = A5;
 const int distanceSensorPin = A2;
-const int bumpSensorPin = A3;
+const int bumpSensorPin = 9;
 
 // Initialize motors
 AF_DCMotor rightMotor(4, MOTOR34_1KHZ);
@@ -62,21 +64,36 @@ const float controlFilterConstant2 = 0.1f;
 // Line detection
 LineSensor rightLineSensor(rightLineSensorPin);
 LineSensor leftLineSensor(leftLineSensorPin);
+LineSensor farLeftLineSensor(farLeftLineSensorPin);
+LineSensor farRightLineSensor(farRightLineSensorPin);
+
+// Bump detection
+bool bumpSensorPressed = false;
+bool bumpDetected = false;
 
 // State machine
 enum State
 {   
     state_wait,
-    state_lineFollow,
+    state_center,
+    state_right,
+    state_left,
+    state_farRight,
+    state_farLeft,
+    state_rightCorner,
+    state_leftCorner,
     state_turn,
 };
-State state = state_0;
+State state = state_wait;
 float rightRelativePositionBase = 0.f;
 float leftRelativePositionBase = 0.f;
 int tripCount = 0;
 bool movingRight;
 bool startRight;
 int measuredDist;
+bool fastMode = false;
+bool lookingForBump = false;
+bool lastCornerRight;
 
 // Function prototypes
 void rightPulse();
@@ -132,9 +149,15 @@ void setup()
 
 
 void loop()
-{
+{    
+    bool temp = !digitalRead(bumpSensorPin);
+    bumpDetected = (!bumpSensorPressed && temp);
+    bumpSensorPressed = temp;
+
     rightLineSensor.update();
     leftLineSensor.update();
+    farRightLineSensor.update();
+    farLeftLineSensor.update();
     
     doStateAction(state);
     state = stateTransition(state);
@@ -147,7 +170,7 @@ void loop()
         Serial.print("?f");
         Serial.print("?x00?y0");
         
-        if (state == state_0)
+        if (state == state_wait)
         {
             if (movingRight)
                 Serial.write("Starting left");
@@ -162,9 +185,9 @@ void loop()
             Serial.print("?x08?y0");
             Serial.print(rightLineSensor.lineFilter);
             Serial.print("?x00?y1");
-            Serial.print(getRelativeDistance());
+            Serial.print(farLeftLineSensor.lineFilter);
             Serial.print("?x08?y1");
-            Serial.print(state);
+            Serial.print(farRightLineSensor.lineFilter);
         }
     }
     
@@ -305,24 +328,38 @@ void updateVelocityLoop()
 
 void doStateAction(State st)
 {
-
+    float speed = fastMode ? 0.4f : 0.3f;
+    float shallowRadius = fastMode ? 0.3f : 0.2f; 
+    float sharpRadius = fastMode ? 0.15f : 0.1f; 
+    
     switch (st)
     {
     case state_wait:
         driveStraight(0.f);
         break;
-    case state_lineFollow:
-        if (rightLineSensor.detected() && leftLineSensor.detected())
-            driveStraight(0.3f);
-        else if (rightLineSensor.detected())
-            driveAndTurn(0.3f, -0.4f);
-        else if (leftLineSensor.detected())
-            driveAndTurn(0.3f, 0.4f);
-        else
-            driveAndTurn(0.3f, movingRight? -0.1f : 0.1f);
+    case state_center:
+        driveStraight(speed);
         break;
-    case state_lineFollow:
-        turnInPlace(2.f);
+    case state_right:
+        driveAndTurn(speed, shallowRadius);
+        break;
+    case state_left:
+        driveAndTurn(speed, -shallowRadius);
+        break;
+    case state_farRight:
+        driveAndTurn(speed, sharpRadius);
+        break;
+    case state_farLeft:
+        driveAndTurn(speed, -sharpRadius);
+        break;
+    case state_rightCorner:
+        driveAndTurn(speed, -0.05f);
+        break;
+    case state_leftCorner:
+        driveAndTurn(speed, 0.05f);
+        break;
+    case state_turn:
+        turnInPlace(3.f);
         break;
     }
 }
@@ -335,29 +372,86 @@ State stateTransition(State oldState)
     switch (oldState)
     {
     case state_wait:
-        if (!digitalRead(bumpSensorPin))
+        if (bumpDetected)
         {
-            newState = state_lineFollow;
+            newState = state_center;
             resetRelativeBase();
         }
         break;
-    case state_lineFollow:
-        if (!digitalRead(bumpSensorPin))
+    case state_center:
+    case state_right:
+    case state_left:
+    case state_farRight:
+    case state_farLeft:
+    case state_leftCorner:
+    case state_rightCorner:
+        if (!lookingForBump && !fastMode && getRelativeDistance() > 0.9f)
+        {
+            fastMode = true;
+            resetRelativeBase();
+        }
+        
+        if (fastMode && getRelativeDistance() > 1.5f)
+        {
+            fastMode = false;
+            lookingForBump = true;
+            resetRelativeBase();
+        }
+        
+        if (lookingForBump && bumpDetected)
         {
             newState = state_turn;
             resetRelativeBase();
         }
+        else if (!fastMode && farRightLineSensor.detected() && 
+                 rightLineSensor.detected() && oldState != state_leftCorner)
+        {
+            newState = state_rightCorner;
+            lastCornerRight = true;
+        }
+        else if (!fastMode && farLeftLineSensor.detected() && 
+                 leftLineSensor.detected() && oldState != state_rightCorner)
+        {
+            newState = state_leftCorner;
+            lastCornerRight = false;
+        }
+        else if (rightLineSensor.detected() && leftLineSensor.detected())
+            newState = state_center;
+        else if (rightLineSensor.detected())
+            newState = state_left;
+        else if (leftLineSensor.detected())
+            newState = state_right;
+        else if (!fastMode)
+            newState = lastCornerRight ? state_rightCorner : state_leftCorner;
+            
+        if (!rightLineSensor.detected() && !leftLineSensor.detected())
+        {
+            if (oldState == state_left)
+                newState = state_farLeft;
+            
+            if (oldState == state_right)
+                newState = state_farRight;
+        }
+        
+        if (tripCount >= 2 && fastMode && getRelativeDistance() > 0.8f)
+        {
+            newState = state_wait;
+        }
+
         break;
     case state_turn:
-        if (fabs(getRelativeAngle) > 160.f)
+        if (fabs(getRelativeAngle()) > 160.f)
         {
-            newState = state_lineFollow;
+            newState = state_center;
             resetRelativeBase();
+            movingRight = !movingRight;
             ++tripCount;
+            fastMode = false;
+            lookingForBump = false;
         }
         break;
     }
-        
+    
     return newState;
 }
 
