@@ -13,7 +13,7 @@ public:
     void calibrate(float risingThreshold, float fallingThreshold);
     
 private:
-	static const float lineFilterConstant = 0.3f;
+	static const float lineFilterConstant;
 	
     float lineRisingThreshold;
 	float lineFallingThreshold;

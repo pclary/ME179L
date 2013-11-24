@@ -2,6 +2,8 @@
 #include "Arduino.h"
 
 
+const float LineSensor::lineFilterConstant = 0.3f;
+
 LineSensor::LineSensor(int pin) : pin(pin), 
                                   lineFilter(0.f), 
                                   lineDetected(false), 

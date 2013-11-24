@@ -1,6 +1,8 @@
 #include "ControlLoop.h"
 
 
+const float ControlLoop::derivativeFilterConstant = 0.2f;
+
 ControlLoop::ControlLoop(float dt) : dt(dt), kp(0.f), ki(0.f), kd(0.f), errorIntegral(0.f), outputMax(1.f), outputMin(-1.f)
 {
     for (int i = 0; i < errorValues.capacity(); ++i)
