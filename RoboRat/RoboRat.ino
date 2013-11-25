@@ -181,6 +181,7 @@ enum WallFollowDistance
     wallFollow_close,
     wallFollow_side,
     wallFollow_normal,
+    wallFollow_far,
 };
 WallFollowDistance wallFollowDistance = wallFollow_normal;
 enum StopCondition
@@ -594,16 +595,18 @@ void doStateAction(State st)
     case state_alignIncoming:
         break;
     case state_alignIncomingNearest:
-        
+        wallFollowDistance = wallFollow_side;
+        driveAndTurn(speed, getWallFollowRadius(actions[currentAction].returnMode != Action::sameSide));
         break;
     case state_alignIncomingNear:
-        
+        wallFollowDistance = wallFollow_far;
+        driveAndTurn(speed, getWallFollowRadius(actions[currentAction].returnMode != Action::sameSide));
         break;
     case state_alignIncomingStarting:
         
         break;
     case state_alignIncomingFar:
-        
+    
         break;
     case state_alignIncomingFurthest:
         
@@ -1108,6 +1111,9 @@ float getWallFollowRadius(bool movingOutward)
         break;
     case wallFollow_normal:
         targetDist = 0.14f;
+        break;
+    case wallFollow_far:
+        targetDist = 0.24f;
         break;
     }
     
