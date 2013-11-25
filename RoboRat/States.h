@@ -12,10 +12,26 @@ enum State
     
     // Alignment
     state_alignOutgoing,
-    state_alignOutgoingCenter,
+    state_alignOutgoingNearest,
+    state_alignOutgoingNear,
+    state_alignOutgoingStarting,
+    state_alignOutgoingFar,
+    state_alignOutgoingFurthest,
+    state_alignOutgoingNearCenter,
+    state_alignOutgoingFarCenter,
+    
     state_alignIncoming,
-    state_alignIncomingCenter,
+    state_alignIncomingNearest,
+    state_alignIncomingNear,
+    state_alignIncomingStarting,
+    state_alignIncomingFar,
+    state_alignIncomingFurthest,
+    state_alignIncomingNearCenter,
+    state_alignIncomingFarCenter,
+    
     state_alignToDropOff,
+    state_alignToDropOffNear,
+    state_alignToDropOffFar,
     
     // Line following
     state_lineFollowBack,

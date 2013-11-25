@@ -162,6 +162,18 @@ const int numChains = 5;
 const State* currentActionChains[numChains]; // start, action, transition, move back, place
 int currentChain = 0;
 int chainPosition = 0;
+int microState = 0;
+Action::Location lastLocation = Action::startingPosition;
+enum AlignmentDistance
+{
+    nearest,
+    near,
+    starting,
+    far,
+    furthest,
+    nearCenter,
+    farCenter,
+};
 
 // State parameters
 enum WallFollowDistance
@@ -200,6 +212,8 @@ void resetRelativeBase();
 float feedForward(float velocity);
 float getWallFollowRadius(bool movingOutward);
 void assembleActionChains();
+AlignmentDistance getOutgoingAlignmentDistance();
+AlignmentDistance getIncomingAlignmentDistance();
 
 
 void setup()
@@ -337,8 +351,8 @@ void loop()
             case Action::farRightSide:
                 Serial.print(actionEntryIndex == 4 * i + 3 ? "RF" : "rf");
                 break;
-            case Action::startingPosition:
-                Serial.print(actionEntryIndex == 4 * i + 3 ? "S" : "S");
+            case Action::startingPosition: // used here to mean sit and defend, "no placement"
+                Serial.print(actionEntryIndex == 4 * i + 3 ? "N" : "n");
                 break;
             }
             
@@ -508,7 +522,7 @@ void doStateAction(State st)
     
     // Program entry
     case state_enterActions:
-		lightFilter = lightFilter * (1.f - lightFilterConstant) + analogRead(lightSensorPin) * lightFilterConstant;
+        lightFilter = lightFilter * (1.f - lightFilterConstant) + analogRead(lightSensorPin) * lightFilterConstant;
         
         if (selectPressDetected)
         {
@@ -540,22 +554,73 @@ void doStateAction(State st)
                 break;
             }
         }
-		break;
+        break;
     
     // Alignment
     case state_alignOutgoing:
+        // This state just bounces immediately to one of the speficic outgoing alignment states
+        break;
+    case state_alignOutgoingNearest:
+    case state_alignOutgoingNear:
+        turnInPlace(actions[currentAction].side == Action::right ? -angularSpeed : angularSpeed);
+        break;
+    case state_alignOutgoingStarting:
+        if (microState == 0)
+            turnInPlace(actions[currentAction].side == Action::right ? -angularSpeed : angularSpeed);
+        else
+            driveAndTurn(speed, actions[currentAction].side == Action::right ? 0.5f : -0.5f);
+        break;
+    case state_alignOutgoingFar:
+        if (microState == 0)
+            turnInPlace(actions[currentAction].side == Action::right ? -angularSpeed : angularSpeed);
+        else
+            driveAndTurn(speed, actions[currentAction].side == Action::right ? 0.6f : -0.6f);
+        break;
+    case state_alignOutgoingFurthest:
+        if (microState == 0)
+            turnInPlace(actions[currentAction].side == Action::right ? -angularSpeed : angularSpeed);
+        else if (microState == 1)
+            driveStraight(speed);
+        else
+            driveAndTurn(speed, actions[currentAction].side == Action::right ? 0.6f : -0.6f);
+        break;
+    case state_alignOutgoingNearCenter:
         
         break;
-    case state_alignOutgoingCenter:
+    case state_alignOutgoingFarCenter:
         
         break;
+        
     case state_alignIncoming:
+        break;
+    case state_alignIncomingNearest:
         
         break;
-    case state_alignIncomingCenter:
+    case state_alignIncomingNear:
         
         break;
+    case state_alignIncomingStarting:
+        
+        break;
+    case state_alignIncomingFar:
+        
+        break;
+    case state_alignIncomingFurthest:
+        
+        break;
+    case state_alignIncomingNearCenter:
+        
+        break;
+    case state_alignIncomingFarCenter:
+        
+        break;
+        
     case state_alignToDropOff:
+        break;
+    case state_alignToDropOffNear:
+        
+        break;
+    case state_alignToDropOffFar:
         
         break;
     
@@ -563,7 +628,7 @@ void doStateAction(State st)
     case state_lineFollowBack:
         if (rightLineSensor.detected() || leftLineSensor.detected())
         {
-            driveStraight(slowSpeed);
+            driveStraight(speed);
         }
         else if (rightLineSensor.detected())
         {
@@ -577,7 +642,7 @@ void doStateAction(State st)
         }
         else
         {
-            driveAndTurn(slowSpeed, lastEdgeRight ? 0.4f : -0.4f);
+            driveAndTurn(speed, lastEdgeRight ? 0.4f : -0.4f);
         }
         break;
     case state_lineFollowSlow:
@@ -723,16 +788,11 @@ void doStateAction(State st)
         turnInPlace(actions[currentAction].side == Action::right ? -angularSpeed : angularSpeed);
         break;
     case state_turn3PointInwards90:
-        {
-            static bool turnForward; // hysteresis
-            if (fabs(getRelativeAngle()) < 0.25)
-                turnForward = true;
-            else if (fabs(getRelativeAngle()) > 0.45)
-                turnForward = false;
-            
-            driveAndTurn(turnForward ? slowSpeed : -slowSpeed, 
-                         (actions[currentAction].side == Action::right) == turnForward ? 0.1f : -0.1f);
-        }
+        if (microState == 0 && fabs(getRelativeAngle()) > 0.40)
+            microState = 1;
+        
+        driveAndTurn(microState == 0 ? slowSpeed : -slowSpeed, 
+                     (actions[currentAction].side == Action::right) == (microState == 0) ? 0.1f : -0.1f);
         break;
     }
 }
@@ -752,7 +812,7 @@ State stateTransition(State oldState)
     
     // Program entry
     case state_enterActions:
-		if (getRelativeTime() > 1.0f && lightFilter < lightSensorThreshold)
+        if (getRelativeTime() > 1.0f && lightFilter < lightSensorThreshold)
         {
             nextState = true;
             currentAction = 0;
@@ -760,20 +820,115 @@ State stateTransition(State oldState)
             chainPosition = 0;
             assembleActionChains();
         }
-		break;
+        break;
     
     // Alignment
     case state_alignOutgoing:
-        
+        // This state simply forwards execution to the correct alignment state
+        // It ignores the normal execution flow and jumps directly to the new state
+        switch (getOutgoingAlignmentDistance())
+        {
+        case nearest:
+            newState = state_alignOutgoingNearest;
+            break;
+        case near:
+            newState = state_alignOutgoingNear;
+            break;
+        case far:
+            newState = state_alignOutgoingFar;
+            break;
+        case furthest:
+            newState = state_alignOutgoingFurthest;
+            break;
+        case starting:
+            newState = state_alignOutgoingStarting;
+            break;
+        case nearCenter:
+            newState = state_alignOutgoingNearCenter;
+            break;
+        case farCenter:
+            newState = state_alignOutgoingFarCenter;
+            break;
+        }
         break;
-    case state_alignOutgoingCenter:
-        
+    case state_alignOutgoingNearest:
+        nextState = (fabs(getRelativeAngle()) > 160.f);
         break;
+    case state_alignOutgoingNear:
+        nextState = (fabs(getRelativeAngle()) > 180.f);
+        break;
+    case state_alignOutgoingStarting:
+        switch (microState)
+        {
+        case 0:
+            if (fabs(getRelativeAngle()) > 45.f)
+                ++microState;
+            break;
+        case 1:
+            nextState = (getRelativeDistance() > 0.5f);
+            break;
+        }
+        break;
+    case state_alignOutgoingFar:
+        switch (microState)
+        {
+        case 0:
+            if (fabs(getRelativeAngle()) > 45.f)
+                ++microState;
+            break;
+        case 1:
+            nextState = (getRelativeDistance() > 0.6f);
+            break;
+        }
+        break;
+    case state_alignOutgoingFurthest:
+        switch (microState)
+        {
+        case 0:
+            if (fabs(getRelativeAngle()) > 120.f)
+                ++microState;
+            break;
+        case 1:
+            if (getRelativeDistance() > 0.2f)
+                ++microState;
+            break;
+        case 2:
+            nextState = (getRelativeDistance() > 0.7f);
+            break;
+        }
+        break;
+    case state_alignOutgoingNearCenter:
+    
+        break;
+    case state_alignOutgoingFarCenter:
+    
+        break;
+        
     case state_alignIncoming:
-        
-        break;
-    case state_alignIncomingCenter:
-        
+        switch (getIncomingAlignmentDistance())
+        {
+        case nearest:
+            newState = state_alignIncomingNearest;
+            break;
+        case near:
+            newState = state_alignIncomingNear;
+            break;
+        case far:
+            newState = state_alignIncomingFar;
+            break;
+        case furthest:
+            newState = state_alignIncomingFurthest;
+            break;
+        case starting:
+            newState = state_alignIncomingStarting;
+            break;
+        case nearCenter:
+            newState = state_alignIncomingNearCenter;
+            break;
+        case farCenter:
+            newState = state_alignIncomingFarCenter;
+            break;
+        }
         break;
     case state_alignToDropOff:
         
@@ -869,6 +1024,7 @@ State stateTransition(State oldState)
     if (nextState)
     {
         resetRelativeBase();
+        microState = 0;
         ++chainPosition;
         
         if (currentActionChains[currentChain][chainPosition] == state_endOfChain)
@@ -1025,4 +1181,57 @@ void assembleActionChains()
     }
     
     currentActionChains[4] = dropOff;
+}
+
+
+AlignmentDistance getOutgoingAlignmentDistance()
+{
+    switch (lastLocation)
+    {
+    case Action::farLeftSide:
+        return (actions[currentAction].side == Action::right ? furthest : nearest);
+    case Action::leftSide:
+        return (actions[currentAction].side == Action::right ? far : near);
+    case Action::rightSide:
+        return (actions[currentAction].side == Action::right ? near : far);
+    case Action::farRightSide:
+        return (actions[currentAction].side == Action::right ? nearest : furthest);
+    case Action::startingPosition:
+        return starting;
+    }
+}
+
+
+AlignmentDistance getIncomingAlignmentDistance()
+{
+    bool currentSideRight = actions[currentAction].side == Action::right;
+    bool returningCenter = actions[currentAction].returnMode == Action::center;
+    if (actions[currentAction].returnMode == Action::oppositeSide || actions[currentAction].returnMode == Action::hitWall)
+        currentSideRight = !currentSideRight;
+    
+    switch (actions[currentAction].placement)
+    {
+    case Action::farLeftSide:
+        if (returningCenter)
+            return farCenter;
+        else
+            return (currentSideRight ? furthest : nearest);
+    case Action::leftSide:
+        if (returningCenter)
+            return farCenter;
+        else
+            return (currentSideRight ? far : near);
+    case Action::rightSide:
+        if (returningCenter)
+            return farCenter;
+        else
+            return (currentSideRight ? near : far);
+    case Action::farRightSide:
+        if (returningCenter)
+            return farCenter;
+        else
+            return (currentSideRight ? nearest : furthest);
+    case Action::startingPosition:
+        return starting;
+    }
 }

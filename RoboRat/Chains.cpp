@@ -7,7 +7,7 @@
  *****************************************************************************/
 const State startingChain[] = 
 {
-    state_clawSideLevel,
+    state_clawMaxHeight,
     state_closeClaw,
     state_alignOutgoing,
     state_endOfChain
@@ -26,7 +26,7 @@ const State returnSameSide[] =
 const State returnCenter[] = 
 {
     state_lineFollowBack,
-    state_alignIncomingCenter,
+    state_alignIncoming,
     state_endOfChain
 };
 
