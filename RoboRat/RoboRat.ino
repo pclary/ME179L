@@ -134,18 +134,19 @@ struct Action
         hitWall,
     };
     
-    enum CheesePlacement
+    enum Location
     {
         farLeftSide,
         leftSide,
         rightSide,
         farRightSide,
+        startingPosition,
     };
     
     Type type;
     Side side;
     ReturnMode returnMode;
-    CheesePlacement placement;
+    Location placement;
 };
 const int numActions = 4;
 Action actions[numActions];
@@ -335,6 +336,9 @@ void loop()
                 break;
             case Action::farRightSide:
                 Serial.print(actionEntryIndex == 4 * i + 3 ? "RF" : "rf");
+                break;
+            case Action::startingPosition:
+                Serial.print(actionEntryIndex == 4 * i + 3 ? "S" : "S");
                 break;
             }
             
@@ -526,9 +530,13 @@ void doStateAction(State st)
                 actions[index].side = Action::Side(int(actions[index].side) + 1);
                 actions[index].side = Action::Side(int(actions[index].side) % 2);
                 break;
-            case 2: // return side
+            case 2: // return mode
                 actions[index].returnMode = Action::ReturnMode(int(actions[index].returnMode) + 1);
                 actions[index].returnMode = Action::ReturnMode(int(actions[index].returnMode) % 4);
+                break;
+            case 3: // placement
+                actions[index].placement = Action::Location(int(actions[index].placement) + 1);
+                actions[index].placement = Action::Location(int(actions[index].placement) % 4);
                 break;
             }
         }
@@ -719,7 +727,7 @@ void doStateAction(State st)
             static bool turnForward; // hysteresis
             if (fabs(getRelativeAngle()) < 0.25)
                 turnForward = true;
-            else if (fabs(getRelativeAngle()) > 0.45
+            else if (fabs(getRelativeAngle()) > 0.45)
                 turnForward = false;
             
             driveAndTurn(turnForward ? slowSpeed : -slowSpeed, 
