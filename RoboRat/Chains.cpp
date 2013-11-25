@@ -46,6 +46,7 @@ const State dropOff[] =
     state_straighten,
     state_backUpToPlaceCheese,
     state_dropOffCheese,
+    state_clawMaxHeight,
     state_backUpToTurn,
     state_endOfChain
 };
@@ -65,8 +66,8 @@ const State getRampCheese[] =
     state_lineFollowSlow,
     state_straighten,
     state_pickUpCheeseFromRamp,
-    state_backUpToTurn,
     state_clawMaxHeight,
+    state_backUpToTurn,
     state_endOfChain
 };
 
@@ -140,8 +141,7 @@ const State getSideCheese[] =
     state_clawFloorLevel,
     state_setStopAtShortDistance,
     state_forward,
-    state_closeClaw,
-    state_shortPause,
+    state_pickUpCheeseFromFloor,
     state_clawMaxHeight,
     state_endOfChain
 };

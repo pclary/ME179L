@@ -32,8 +32,13 @@ Servo elevationServo;
 Servo clawServo;
 const int clawOpen = 180;
 const int clawClosed = 0;
-const int elevationRaised = 0;
-const int elevationLowered = 180;
+const int elevationMax = 110;
+const int elevationWall = 60;
+const int elevationWallLow = 50;
+const int elevationRamp = 45;
+const int elevationRampLow = 35;
+const int elevationSide = 10;
+const int elevationFloor = 0;
 
 // Encoder variables
 struct EncoderData
@@ -489,6 +494,7 @@ void doStateAction(State st)
 {
     const float speed = 0.25f;
     const float slowSpeed = 0.15f;
+    const float angularSpeed = 2.f;
 
     switch (st)
     {
@@ -547,18 +553,52 @@ void doStateAction(State st)
     
     // Line following
     case state_lineFollowBack:
-        
+        if (rightLineSensor.detected() || leftLineSensor.detected())
+        {
+            driveStraight(slowSpeed);
+        }
+        else if (rightLineSensor.detected())
+        {
+            driveAndTurn(speed, 0.5f);
+            lastEdgeRight = false;
+        }
+        else if (leftLineSensor.detected())
+        {
+            driveAndTurn(speed, -0.5f);
+            lastEdgeRight = true;
+        }
+        else
+        {
+            driveAndTurn(slowSpeed, lastEdgeRight ? 0.4f : -0.4f);
+        }
         break;
     case state_lineFollowSlow:
-        
+        if (rightLineSensor.detected() || leftLineSensor.detected())
+        {
+            driveStraight(slowSpeed);
+        }
+        else if (rightLineSensor.detected())
+        {
+            driveAndTurn(slowSpeed, 0.3f);
+            lastEdgeRight = false;
+        }
+        else if (leftLineSensor.detected())
+        {
+            driveAndTurn(slowSpeed, -0.3f);
+            lastEdgeRight = true;
+        }
+        else
+        {
+            driveAndTurn(slowSpeed, lastEdgeRight ? 0.2f : -0.2f);
+        }
         break;
     
     // Movement with settable parameters
     case state_wallFollowOut:
-        
+        driveAndTurn(speed, getWallFollowRadius(true));
         break;
     case state_wallFollowBack:
-        
+        driveAndTurn(speed, getWallFollowRadius(false));
         break;
     case state_forward:
         driveStraight(speed);
@@ -589,68 +629,102 @@ void doStateAction(State st)
     
     // Dropping off and picking up cheese
     case state_straighten:
-        
+        if (int(getRelativeTime()) % 2 == 0)
+            driveAndTurn(slowSpeed, 0.05f);
+        else
+            driveAndTurn(slowSpeed, -0.05f);
         break;
     case state_pickUpCheeseFromWall:
-        
+        driveStraight(0.f);
+        if (getRelativeTime() < 0.5f)
+        {
+            clawServo.write(clawOpen);
+            elevationServo.write(elevationWallLow);
+        }
+        else
+        {
+            clawServo.write(clawClosed);
+        }
         break;
     case state_pickUpCheeseFromRamp:
-        
+        driveStraight(0.f);
+        if (getRelativeTime() < 0.5f)
+        {
+            clawServo.write(clawOpen);
+            elevationServo.write(elevationRampLow);
+        }
+        else 
+        {
+            clawServo.write(clawClosed);
+        }
         break;
     case state_pickUpCheeseFromFloor:
-        
+        clawServo.write(clawClosed);
         break;
     case state_dropOffCheese:
-        
+        driveStraight(0.f);
+        if (getRelativeTime() < 0.5f)
+        {
+            clawServo.write(clawClosed);
+            elevationServo.write(elevationWallLow);
+        }
+        else
+        {
+            clawServo.write(clawOpen);
+        }
         break;
     
     // Claw movements
     case state_openClaw:
-        
+        clawServo.write(clawOpen);
         break;
     case state_closeClaw:
-        
+        clawServo.write(clawClosed);
         break;
     case state_clawMaxHeight:
-        
+        elevationServo.write(elevationMax);
         break;
     case state_clawWallLevel:
-        
+        elevationServo.write(elevationWall);
         break;
     case state_clawRampLevel:
-        
+        elevationServo.write(elevationRamp);
         break;
     case state_clawSideLevel:
-        
+        elevationServo.write(elevationSide);
         break;
     case state_clawFloorLevel:
-        
+        elevationServo.write(elevationFloor);
         break;
     
     // Miscellaneous movement
     case state_shortPause:
-        
         break;
     case state_backUpToTurn:
-        
+        driveStraight(-speed);
         break;
     case state_backUpToPlaceCheese:
-        
+        driveStraight(-slowSpeed);
         break;
     case state_turnInwards90:
-        
-        break;
-    case state_turn3PointInwards90:
-        
+    case state_turnInwards180:
+        turnInPlace(actions[currentAction].side == Action::right ? angularSpeed : -angularSpeed);
         break;
     case state_turnOutwards90:
-        
-        break;
-    case state_turnInwards180:
-        
-        break;
     case state_turnOutwards180:
-        
+        turnInPlace(actions[currentAction].side == Action::right ? -angularSpeed : angularSpeed);
+        break;
+    case state_turn3PointInwards90:
+        {
+            static bool turnForward; // hysteresis
+            if (fabs(getRelativeAngle()) < 0.25)
+                turnForward = true;
+            else if (fabs(getRelativeAngle()) > 0.45
+                turnForward = false;
+            
+            driveAndTurn(turnForward ? slowSpeed : -slowSpeed, 
+                         (actions[currentAction].side == Action::right) == turnForward ? 0.1f : -0.1f);
+        }
         break;
     }
 }
@@ -739,19 +813,17 @@ State stateTransition(State oldState)
     
     // Dropping off and picking up cheese
     case state_straighten:
-        
+        nextState = (getRelativeTime() > 2.f);
         break;
     case state_pickUpCheeseFromWall:
-        
-        break;
     case state_pickUpCheeseFromRamp:
-        
+        nextState = (getRelativeTime() > 1.5f);
         break;
     case state_pickUpCheeseFromFloor:
-        
+        nextState = (getRelativeTime() > 1.f);
         break;
     case state_dropOffCheese:
-        
+        nextState = (getRelativeTime() > 1.5f);
         break;
     
     // Claw movements
