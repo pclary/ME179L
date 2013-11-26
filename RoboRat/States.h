@@ -8,10 +8,10 @@ enum State
     state_endOfChain = 0,
 
     // Program entry
-    state_enterActions,
+    state_enterActions = 1,
     
     // Alignment
-    state_alignOutgoing,
+    state_alignOutgoing = 10,
     state_alignOutgoingNearest,
     state_alignOutgoingNear,
     state_alignOutgoingStarting,
@@ -20,7 +20,7 @@ enum State
     state_alignOutgoingNearCenter,
     state_alignOutgoingFarCenter,
     
-    state_alignIncoming,
+    state_alignIncoming = 20,
     state_alignIncomingNearest,
     state_alignIncomingNear,
     state_alignIncomingStarting,
@@ -29,37 +29,40 @@ enum State
     state_alignIncomingNearCenter,
     state_alignIncomingFarCenter,
     
-    state_alignToDropOff,
+    state_alignToDropOff = 30,
     state_alignToDropOffNear,
     state_alignToDropOffFar,
     
     // Line following
-    state_lineFollowBack,
+    state_lineFollowBack = 40,
     state_lineFollowSlow,
     
     // Movement with settable parameters
-    state_wallFollowOut,
+    state_wallFollowOut = 50,
     state_wallFollowBack,
     state_forward,
     
     // Movement options
-    state_setCloseFollowDistance,
+    state_setCloseFollowDistance = 60,
     state_setSideFollowDistance,
     state_setNormalFollowDistance,
     state_setStopAtLine,
     state_setStopAtBump,
     state_setStopAtHalfRampDistance,
     state_setStopAtShortDistance,
+    state_setStopAtMediumDistance,
+    state_setLongHoldoff,
+    state_setNoHoldoff,
     
     // Dropping off and picking up cheese
-    state_straighten,
+    state_straighten = 70,
     state_pickUpCheeseFromWall,
     state_pickUpCheeseFromRamp,
     state_pickUpCheeseFromFloor,
     state_dropOffCheese,
     
     // Claw movements
-    state_openClaw,
+    state_openClaw = 80,
     state_closeClaw,
     state_clawMaxHeight,
     state_clawWallLevel,
@@ -68,8 +71,9 @@ enum State
     state_clawFloorLevel,
     
     // Miscellaneous movement
-    state_shortPause,
+    state_shortPause = 90,
     state_backUpToTurn,
+    state_backUpShortToTurn,
     state_backUpToPlaceCheese,
     state_turnInwards90,
     state_turn3PointInwards90,

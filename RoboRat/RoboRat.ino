@@ -30,14 +30,14 @@ AF_DCMotor leftMotor(3, MOTOR34_1KHZ);
 // Servos
 Servo elevationServo;
 Servo clawServo;
-const int clawOpen = 180;
-const int clawClosed = 0;
+const int clawOpen = 0;
+const int clawClosed = 180;
 const int elevationMax = 110;
-const int elevationWall = 60;
-const int elevationWallLow = 50;
-const int elevationRamp = 45;
-const int elevationRampLow = 35;
-const int elevationSide = 10;
+const int elevationWall = 90;
+const int elevationWallLow = 70;
+const int elevationRamp = 70;
+const int elevationRampLow = 50;
+const int elevationSide = 30;
 const int elevationFloor = 0;
 
 // Encoder variables
@@ -101,7 +101,7 @@ bool selectPressDetected = false;
 bool scrollPressDetected = false;
 
 // Light sensor
-const float lightSensorThreshold = 600.f;
+const float lightSensorThreshold = 650.f;
 float lightFilter = 0.f;
 const float lightFilterConstant = 0.2f;
 
@@ -190,8 +190,12 @@ enum StopCondition
     stopCondition_bump,
     stopCondition_halfRampDistance,
     stopCondition_shortDistance,
+    stopCondition_mediumDistance,
 };
 StopCondition stopCondition = stopCondition_line;
+const float normalHoldoff = 0.5f;
+const float longHoldoff = 1.5f;
+float holdoffTime = normalHoldoff;
 
 // Function prototypes
 void rightPulse();
@@ -216,6 +220,8 @@ void assembleActionChains();
 AlignmentDistance getOutgoingAlignmentDistance();
 AlignmentDistance getIncomingAlignmentDistance();
 
+float debug = 0;
+
 
 void setup()
 {
@@ -231,7 +237,6 @@ void setup()
     digitalWrite(bumpSensorPin, HIGH);
     digitalWrite(lightSensorPin, HIGH);
     digitalWrite(selectButtonPin, HIGH);
-    digitalWrite(scrollButtonPin, HIGH);
     
     attachInterrupt(0, &rightPulse, RISING);
     attachInterrupt(1, &leftPulse, RISING);
@@ -264,7 +269,7 @@ void loop()
     selectPressDetected = (!selectPressed && temp);
     selectPressed = temp;
     
-    temp = !digitalRead(scrollButtonPin);
+    temp = digitalRead(scrollButtonPin); // Scroll is active high because of the LED
     scrollPressDetected = (!scrollPressed && temp);
     scrollPressed = temp;
     
@@ -283,94 +288,108 @@ void loop()
     if (cycleCount % displayUpdateCycles == 0)
     {
         Serial.print("?f");
-        Serial.print("?x00?y0");
         
-        for (int i = 0; i < numActions; ++i)
+        if (state == state_enterActions)
         {
-            switch (actions[i].type)
+            Serial.print("?x00?y0");
+            for (int i = 0; i < numActions; ++i)
             {
-            case Action::rampCheese:
-                Serial.print(actionEntryIndex == 4 * i ? "R" : "r");
-                break;
-            case Action::sideCheese:
-                Serial.print(actionEntryIndex == 4 * i ? "S" : "s");
-                break;
-            case Action::floorCheese:
-                Serial.print(actionEntryIndex == 4 * i ? "F" : "f");
-                break;
-            case Action::opponentWall:
-                Serial.print(actionEntryIndex == 4 * i ? "W" : "W");
-                break;
-            case Action::opponentWallOuter:
-                Serial.print(actionEntryIndex == 4 * i ? "O" : "o");
-                break;
-            case Action::dropOff:
-                Serial.print(actionEntryIndex == 4 * i ? "D" : "d");
-                break;
-            case Action::last:
-                Serial.print(actionEntryIndex == 4 * i ? "X" : "x");
-                break;
+                switch (actions[i].type)
+                {
+                case Action::rampCheese:
+                    Serial.print(actionEntryIndex == 4 * i ? "R" : "r");
+                    break;
+                case Action::sideCheese:
+                    Serial.print(actionEntryIndex == 4 * i ? "S" : "s");
+                    break;
+                case Action::floorCheese:
+                    Serial.print(actionEntryIndex == 4 * i ? "F" : "f");
+                    break;
+                case Action::opponentWall:
+                    Serial.print(actionEntryIndex == 4 * i ? "W" : "w");
+                    break;
+                case Action::opponentWallOuter:
+                    Serial.print(actionEntryIndex == 4 * i ? "O" : "o");
+                    break;
+                case Action::dropOff:
+                    Serial.print(actionEntryIndex == 4 * i ? "D" : "d");
+                    break;
+                case Action::last:
+                    Serial.print(actionEntryIndex == 4 * i ? "X" : "x");
+                    break;
+                }
+                
+                switch (actions[i].side)
+                {
+                case Action::right:
+                    Serial.print(actionEntryIndex == 4 * i + 1 ? "R" : "r");
+                    break;
+                case Action::left:
+                    Serial.print(actionEntryIndex == 4 * i + 1 ? "L" : "l");
+                    break;
+                }
+                
+                switch (actions[i].returnMode)
+                {
+                case Action::sameSide:
+                    Serial.print(actionEntryIndex == 4 * i + 2 ? "S" : "s");
+                    break;
+                case Action::center:
+                    Serial.print(actionEntryIndex == 4 * i + 2 ? "C" : "c");
+                    break;
+                case Action::oppositeSide:
+                    Serial.print(actionEntryIndex == 4 * i + 2 ? "O" : "o");
+                    break;
+                case Action::hitWall:
+                    Serial.print(actionEntryIndex == 4 * i + 2 ? "W" : "w");
+                    break;
+                }
+                
+                switch (actions[i].placement)
+                {
+                case Action::farLeftSide:
+                    Serial.print(actionEntryIndex == 4 * i + 3 ? "LF" : "lf");
+                    break;
+                case Action::leftSide:
+                    Serial.print(actionEntryIndex == 4 * i + 3 ? "L" : "l");
+                    break;
+                case Action::rightSide:
+                    Serial.print(actionEntryIndex == 4 * i + 3 ? "R" : "r");
+                    break;
+                case Action::farRightSide:
+                    Serial.print(actionEntryIndex == 4 * i + 3 ? "RF" : "rf");
+                    break;
+                case Action::startingPosition: // used here to mean sit and defend, "no placement"
+                    Serial.print(actionEntryIndex == 4 * i + 3 ? "N" : "n");
+                    break;
+                }
+                
+                Serial.print(" ");
+                
+                switch (i)
+                {
+                case 0:
+                    Serial.print("?x08?y0");
+                    break;
+                case 1:
+                    Serial.print("?x00?y1");
+                    break;
+                case 2:
+                    Serial.print("?x08?y1");
+                    break;
+                }
             }
-            
-            switch (actions[i].side)
-            {
-            case Action::right:
-                Serial.print(actionEntryIndex == 4 * i + 1 ? "R" : "r");
-                break;
-            case Action::left:
-                Serial.print(actionEntryIndex == 4 * i + 1 ? "L" : "l");
-                break;
-            }
-            
-            switch (actions[i].returnMode)
-            {
-            case Action::sameSide:
-                Serial.print(actionEntryIndex == 4 * i + 2 ? "S" : "s");
-                break;
-            case Action::center:
-                Serial.print(actionEntryIndex == 4 * i + 2 ? "C" : "c");
-                break;
-            case Action::oppositeSide:
-                Serial.print(actionEntryIndex == 4 * i + 2 ? "O" : "o");
-                break;
-            case Action::hitWall:
-                Serial.print(actionEntryIndex == 4 * i + 2 ? "W" : "w");
-                break;
-            }
-            
-            switch (actions[i].placement)
-            {
-            case Action::farLeftSide:
-                Serial.print(actionEntryIndex == 4 * i + 3 ? "LF" : "lf");
-                break;
-            case Action::leftSide:
-                Serial.print(actionEntryIndex == 4 * i + 3 ? "L" : "l");
-                break;
-            case Action::rightSide:
-                Serial.print(actionEntryIndex == 4 * i + 3 ? "R" : "r");
-                break;
-            case Action::farRightSide:
-                Serial.print(actionEntryIndex == 4 * i + 3 ? "RF" : "rf");
-                break;
-            case Action::startingPosition: // used here to mean sit and defend, "no placement"
-                Serial.print(actionEntryIndex == 4 * i + 3 ? "N" : "n");
-                break;
-            }
-            
-            Serial.print(" ");
-            
-            switch (i)
-            {
-            case 0:
-                Serial.print("?x08?y0");
-                break;
-            case 1:
-                Serial.print("?x00?y1");
-                break;
-            case 2:
-                Serial.print("?x08?y1");
-                break;
-            }
+        }
+        else
+        {
+            Serial.print("?x00?y0");
+            Serial.print(state);
+            Serial.print("?x08?y0");
+            Serial.print(getRelativeTime());
+            Serial.print("?x00?y1");
+            Serial.print(holdoffTime);
+            Serial.print("?x08?y1");
+            Serial.print(rightLineSensor.detected() || leftLineSensor.detected());
         }
     }
     
@@ -511,8 +530,8 @@ void updateVelocityLoop()
 
 void doStateAction(State st)
 {
-    const float speed = 0.25f;
-    const float slowSpeed = 0.15f;
+    const float speed = 0.35f;
+    const float slowSpeed = 0.2f;
     const float angularSpeed = 2.f;
 
     switch (st)
@@ -523,6 +542,9 @@ void doStateAction(State st)
     
     // Program entry
     case state_enterActions:
+        driveStraight(0.f);
+        clawServo.write(clawClosed);
+        elevationServo.write(elevationFloor);
         lightFilter = lightFilter * (1.f - lightFilterConstant) + analogRead(lightSensorPin) * lightFilterConstant;
         
         if (selectPressDetected)
@@ -568,22 +590,19 @@ void doStateAction(State st)
     case state_alignOutgoingStarting:
         if (microState == 0)
             turnInPlace(actions[currentAction].side == Action::right ? -angularSpeed : angularSpeed);
-        else
+        else if (microState == 1)
             driveAndTurn(speed, actions[currentAction].side == Action::right ? 0.5f : -0.5f);
+        else
+            turnInPlace(actions[currentAction].side == Action::right ? angularSpeed : -angularSpeed);
         break;
     case state_alignOutgoingFar:
-        if (microState == 0)
-            turnInPlace(actions[currentAction].side == Action::right ? -angularSpeed : angularSpeed);
-        else
-            driveAndTurn(speed, actions[currentAction].side == Action::right ? 0.6f : -0.6f);
-        break;
     case state_alignOutgoingFurthest:
         if (microState == 0)
-            turnInPlace(actions[currentAction].side == Action::right ? -angularSpeed : angularSpeed);
+            turnInPlace(actions[currentAction].side == Action::right ? angularSpeed : -angularSpeed);
         else if (microState == 1)
-            driveStraight(speed);
+            driveAndTurn(speed, actions[currentAction].side == Action::right ? 0.5f : -0.5f);
         else
-            driveAndTurn(speed, actions[currentAction].side == Action::right ? 0.6f : -0.6f);
+            turnInPlace(actions[currentAction].side == Action::right ? angularSpeed : -angularSpeed);
         break;
     case state_alignOutgoingNearCenter:
         
@@ -595,7 +614,7 @@ void doStateAction(State st)
     case state_alignIncoming:
         break;
     case state_alignIncomingNearest:
-        wallFollowDistance = wallFollow_side;
+        wallFollowDistance = wallFollow_close;
         driveAndTurn(speed, getWallFollowRadius(actions[currentAction].returnMode != Action::sameSide));
         break;
     case state_alignIncomingNear:
@@ -702,6 +721,15 @@ void doStateAction(State st)
     case state_setStopAtShortDistance:
         stopCondition = stopCondition_shortDistance;
         break;
+    case state_setStopAtMediumDistance:
+        stopCondition = stopCondition_mediumDistance;
+        break;
+    case state_setLongHoldoff:
+        holdoffTime = longHoldoff;
+        break;
+    case state_setNoHoldoff:
+        holdoffTime = 0.f;
+        break;
     
     // Dropping off and picking up cheese
     case state_straighten:
@@ -712,7 +740,7 @@ void doStateAction(State st)
         break;
     case state_pickUpCheeseFromWall:
         driveStraight(0.f);
-        if (getRelativeTime() < 0.5f)
+        if (getRelativeTime() < 0.3f)
         {
             clawServo.write(clawOpen);
             elevationServo.write(elevationWallLow);
@@ -724,7 +752,7 @@ void doStateAction(State st)
         break;
     case state_pickUpCheeseFromRamp:
         driveStraight(0.f);
-        if (getRelativeTime() < 0.5f)
+        if (getRelativeTime() < 0.3f)
         {
             clawServo.write(clawOpen);
             elevationServo.write(elevationRampLow);
@@ -777,6 +805,7 @@ void doStateAction(State st)
     case state_shortPause:
         break;
     case state_backUpToTurn:
+    case state_backUpShortToTurn:
         driveStraight(-speed);
         break;
     case state_backUpToPlaceCheese:
@@ -784,7 +813,7 @@ void doStateAction(State st)
         break;
     case state_turnInwards90:
     case state_turnInwards180:
-        turnInPlace(actions[currentAction].side == Action::right ? angularSpeed : -angularSpeed);
+        turnInPlace(debug = (actions[currentAction].side == Action::right ? angularSpeed : -angularSpeed));
         break;
     case state_turnOutwards90:
     case state_turnOutwards180:
@@ -815,7 +844,8 @@ State stateTransition(State oldState)
     
     // Program entry
     case state_enterActions:
-        if (getRelativeTime() > 1.0f && lightFilter < lightSensorThreshold)
+        if ((getRelativeTime() > 3.0f && lightFilter < lightSensorThreshold) ||
+            (selectPressed && scrollPressed))
         {
             nextState = true;
             currentAction = 0;
@@ -855,20 +885,30 @@ State stateTransition(State oldState)
         }
         break;
     case state_alignOutgoingNearest:
-        nextState = (fabs(getRelativeAngle()) > 160.f);
-        break;
     case state_alignOutgoingNear:
-        nextState = (fabs(getRelativeAngle()) > 180.f);
+        if (fabs(getRelativeAngle()) > 160.f)
+        {
+            wallFollowDistance = wallFollow_normal;
+            stopCondition = stopCondition_halfRampDistance;
+            newState = state_wallFollowOut;
+        }
         break;
     case state_alignOutgoingStarting:
         switch (microState)
         {
         case 0:
-            if (fabs(getRelativeAngle()) > 45.f)
+            if (fabs(getRelativeAngle()) > 20.f)
                 ++microState;
             break;
         case 1:
-            nextState = (getRelativeDistance() > 0.5f);
+            if (getRelativeDistance() > 0.70f)
+                ++microState;
+            break;
+        case 2:
+            if (actions[currentAction].side == Action::right)
+                nextState = (getRelativeAngle() > -10.f);
+            else
+                nextState = (getRelativeAngle() <  10.f);
             break;
         }
         break;
@@ -876,11 +916,18 @@ State stateTransition(State oldState)
         switch (microState)
         {
         case 0:
-            if (fabs(getRelativeAngle()) > 45.f)
+            if (fabs(getRelativeAngle()) > 95.f)
                 ++microState;
             break;
         case 1:
-            nextState = (getRelativeDistance() > 0.6f);
+            if (getRelativeDistance() > 0.70f)
+                ++microState;
+            break;
+        case 2:
+            if (actions[currentAction].side == Action::right)
+                nextState = (getRelativeAngle() > -10.f);
+            else
+                nextState = (getRelativeAngle() <  10.f);
             break;
         }
         break;
@@ -888,15 +935,18 @@ State stateTransition(State oldState)
         switch (microState)
         {
         case 0:
-            if (fabs(getRelativeAngle()) > 120.f)
+            if (fabs(getRelativeAngle()) > 90.f)
                 ++microState;
             break;
         case 1:
-            if (getRelativeDistance() > 0.2f)
+            if (getRelativeDistance() > 0.75f)
                 ++microState;
             break;
         case 2:
-            nextState = (getRelativeDistance() > 0.7f);
+            if (actions[currentAction].side == Action::right)
+                nextState = (getRelativeAngle() > -10.f);
+            else
+                nextState = (getRelativeAngle() <  10.f);
             break;
         }
         break;
@@ -933,7 +983,22 @@ State stateTransition(State oldState)
             break;
         }
         break;
+    case state_alignIncomingNearest:
+    case state_alignIncomingNear:
+    case state_alignIncomingStarting:
+    case state_alignIncomingFar:
+    case state_alignIncomingFurthest:
+    case state_alignIncomingNearCenter:
+    case state_alignIncomingFarCenter:
+        nextState = bumpDetected;
+        break;
+        
     case state_alignToDropOff:
+        break;
+    case state_alignToDropOffNear:
+        
+        break;
+    case state_alignToDropOffFar:
         
         break;
     
@@ -949,21 +1014,30 @@ State stateTransition(State oldState)
     case state_wallFollowOut:
     case state_wallFollowBack:
     case state_forward:
-        switch (stopCondition)
+        if (getRelativeTime() > holdoffTime)
         {
-        case stopCondition_line:
-            nextState = (rightLineSensor.detected() || leftLineSensor.detected());
-            break;
-        case stopCondition_bump:
-            nextState = bumpDetected;
-            break;
-        case stopCondition_halfRampDistance:
-            nextState = (getRelativeDistance() > 0.3f);
-            break;
-        case stopCondition_shortDistance:
-            nextState = (getRelativeDistance() > 0.1f);
-            break;
+            switch (stopCondition)
+            {
+            case stopCondition_line:
+                nextState = (rightLineSensor.detected() || leftLineSensor.detected());
+                break;
+            case stopCondition_bump:
+                nextState = bumpDetected;
+                break;
+            case stopCondition_halfRampDistance:
+                nextState = (getRelativeDistance() > 0.9f);
+                break;
+            case stopCondition_shortDistance:
+                nextState = (getRelativeDistance() > 0.1f);
+                break;
+            case stopCondition_mediumDistance:
+                nextState = (getRelativeDistance() > 0.25f);
+                break;
+            }
         }
+        
+        if (nextState)
+            holdoffTime = normalHoldoff;
         break;
     
     // Movement options
@@ -974,6 +1048,9 @@ State stateTransition(State oldState)
     case state_setStopAtBump:
     case state_setStopAtHalfRampDistance:
     case state_setStopAtShortDistance:
+    case state_setStopAtMediumDistance:
+    case state_setLongHoldoff:
+    case state_setNoHoldoff:
         nextState = true;
         break;
     
@@ -983,7 +1060,7 @@ State stateTransition(State oldState)
         break;
     case state_pickUpCheeseFromWall:
     case state_pickUpCheeseFromRamp:
-        nextState = (getRelativeTime() > 1.5f);
+        nextState = (getRelativeTime() > 1.f);
         break;
     case state_pickUpCheeseFromFloor:
         nextState = (getRelativeTime() > 1.f);
@@ -1008,19 +1085,22 @@ State stateTransition(State oldState)
         nextState = (getRelativeTime() > 1.0f);
         break;
     case state_backUpToTurn:
-        nextState = (getRelativeDistance() < 0.1f);
+        nextState = (getRelativeDistance() < -0.08f);
+        break;
+    case state_backUpShortToTurn:
+        nextState = (getRelativeDistance() < -0.03f);
         break;
     case state_backUpToPlaceCheese:
-        nextState = (getRelativeDistance() < 0.05f);
+        nextState = (getRelativeDistance() < -0.02f);
         break;
     case state_turnInwards90:
     case state_turn3PointInwards90:
     case state_turnOutwards90:
-        nextState = (fabs(getRelativeAngle()) < 75.f);
+        nextState = (fabs(getRelativeAngle()) > 80.f);
         break;
     case state_turnInwards180:
     case state_turnOutwards180:
-        nextState = (fabs(getRelativeAngle()) < 160.f);
+        nextState = (fabs(getRelativeAngle()) > 160.f);
         break;
     }
     
@@ -1028,7 +1108,8 @@ State stateTransition(State oldState)
     {
         resetRelativeBase();
         microState = 0;
-        ++chainPosition;
+        if (oldState != state_enterActions)
+            ++chainPosition;
         
         if (currentActionChains[currentChain][chainPosition] == state_endOfChain)
         {
@@ -1037,6 +1118,7 @@ State stateTransition(State oldState)
             
             if (currentChain >= numChains)
             {
+                lastLocation = actions[currentAction].placement;
                 ++currentAction;
                 currentAction %= numActions;
                 currentChain = 0;
@@ -1051,6 +1133,8 @@ State stateTransition(State oldState)
     {
         newState = state_enterActions;
         actionEntryIndex = 0;
+        resetRelativeBase();
+        lastLocation = Action::startingPosition;
     }
     
     return newState;
@@ -1110,10 +1194,10 @@ float getWallFollowRadius(bool movingOutward)
         targetDist = 0.10f;
         break;
     case wallFollow_normal:
-        targetDist = 0.14f;
+        targetDist = 0.15f;
         break;
     case wallFollow_far:
-        targetDist = 0.24f;
+        targetDist = 0.22f;
         break;
     }
     

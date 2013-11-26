@@ -41,10 +41,8 @@ const State returnOpposite[] =
 
 const State dropOff[] = 
 {
-    state_setStopAtBump,
-    state_forward,
-    state_straighten,
-    state_backUpToPlaceCheese,
+    //state_straighten,
+    //state_backUpToPlaceCheese,
     state_dropOffCheese,
     state_clawMaxHeight,
     state_backUpToTurn,
@@ -57,14 +55,18 @@ const State dropOff[] =
  *****************************************************************************/
 const State getRampCheese[] = 
 {
+    state_setLongHoldoff,
     state_setNormalFollowDistance,
     state_setStopAtLine,
     state_wallFollowOut,
     state_openClaw,
-    state_clawRampLevel,
+    state_setStopAtShortDistance,
+    state_forward,
     state_turn3PointInwards90,
-    state_lineFollowSlow,
-    state_straighten,
+    state_clawRampLevel,
+    state_setStopAtBump,
+    state_forward,
+    //state_straighten,
     state_pickUpCheeseFromRamp,
     state_clawMaxHeight,
     state_backUpToTurn,
@@ -97,9 +99,11 @@ const State rampToOppositeTransition[] =
     state_setStopAtHalfRampDistance,
     state_wallFollowOut,
     state_turnInwards90,
+    state_clawSideLevel,
     state_setStopAtBump,
     state_forward,
     state_backUpToTurn,
+    state_clawMaxHeight,
     state_turnInwards90,
     state_setNormalFollowDistance,
     state_setStopAtLine,
@@ -113,6 +117,7 @@ const State rampToHitWallTransition[] =
     state_setNormalFollowDistance,
     state_setStopAtBump,
     state_wallFollowOut,
+    state_backUpShortToTurn,
     state_clawWallLevel,
     state_turnInwards90,
     state_setCloseFollowDistance,
@@ -131,6 +136,9 @@ const State rampToHitWallTransition[] =
  *****************************************************************************/
 const State getSideCheese[] = 
 {
+    state_setNormalFollowDistance,
+    state_setStopAtMediumDistance,
+    state_wallFollowOut,
     state_openClaw,
     state_clawSideLevel,
     state_setSideFollowDistance,
@@ -167,9 +175,11 @@ const State sideToCenterTransition[] =
 const State sideToOppositeTransition[] = 
 {
     state_turnInwards90,
+    state_clawSideLevel,
     state_setStopAtBump,
     state_forward,
     state_backUpToTurn,
+    state_clawMaxHeight,
     state_turnInwards90,
     state_setNormalFollowDistance,
     state_setStopAtLine,
@@ -182,6 +192,7 @@ const State sideToHitWallTransition[] =
     state_setNormalFollowDistance,
     state_setStopAtBump,
     state_wallFollowOut,
+    state_backUpShortToTurn,
     state_clawWallLevel,
     state_turnInwards90,
     state_setCloseFollowDistance,
