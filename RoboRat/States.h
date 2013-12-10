@@ -19,6 +19,8 @@ enum State
     state_alignOutgoingFurthest,
     state_alignOutgoingNearCenter,
     state_alignOutgoingFarCenter,
+	state_alignImmediateNear,
+	state_alignImmediateFar,
     
     state_alignIncoming = 20,
     state_alignIncomingNearest,
@@ -75,6 +77,7 @@ enum State
     state_backUpToTurn,
     state_backUpShortToTurn,
     state_backUpToPlaceCheese,
+    state_turnInwards30,
     state_turnInwards90,
     state_turn3PointInwards90,
     state_turnOutwards90,

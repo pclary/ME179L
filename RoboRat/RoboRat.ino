@@ -815,6 +815,9 @@ void doStateAction(State st)
     case state_turnInwards180:
         turnInPlace(debug = (actions[currentAction].side == Action::right ? angularSpeed : -angularSpeed));
         break;
+    case state_turnInwards30:
+        turnInPlace(debug = (actions[currentAction].side == Action::right ? angularSpeed : -angularSpeed));
+        break;   
     case state_turnOutwards90:
     case state_turnOutwards180:
         turnInPlace(actions[currentAction].side == Action::right ? -angularSpeed : angularSpeed);
@@ -901,7 +904,7 @@ State stateTransition(State oldState)
                 ++microState;
             break;
         case 1:
-            if (getRelativeDistance() > 0.70f)
+            if (getRelativeDistance() > 0.75f)
                 ++microState;
             break;
         case 2:
@@ -920,7 +923,7 @@ State stateTransition(State oldState)
                 ++microState;
             break;
         case 1:
-            if (getRelativeDistance() > 0.70f)
+            if (getRelativeDistance() > 0.75f)
                 ++microState;
             break;
         case 2:
@@ -1085,7 +1088,7 @@ State stateTransition(State oldState)
         nextState = (getRelativeTime() > 1.0f);
         break;
     case state_backUpToTurn:
-        nextState = (getRelativeDistance() < -0.08f);
+        nextState = (getRelativeDistance() < -0.1f);
         break;
     case state_backUpShortToTurn:
         nextState = (getRelativeDistance() < -0.03f);
@@ -1101,6 +1104,9 @@ State stateTransition(State oldState)
     case state_turnInwards180:
     case state_turnOutwards180:
         nextState = (fabs(getRelativeAngle()) > 160.f);
+        break;
+    case state_turnInwards30:
+    nextState = (fabs(getRelativeAngle()) > 15.f);
         break;
     }
     
@@ -1188,16 +1194,16 @@ float getWallFollowRadius(bool movingOutward)
     switch (wallFollowDistance)
     {
     case wallFollow_close:
-        targetDist = 0.05f;
+        targetDist = 0.07f;
         break;
     case wallFollow_side:
-        targetDist = 0.10f;
+        targetDist = 0.09f;
         break;
     case wallFollow_normal:
         targetDist = 0.15f;
         break;
     case wallFollow_far:
-        targetDist = 0.22f;
+        targetDist = 0.23f;
         break;
     }
     

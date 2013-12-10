@@ -43,7 +43,7 @@ float ControlLoop::update(float error, float feedForward)
         {
             errorIntegral = tempErrorIntegral;
         }
-	
+        
         // Limit the integral to the amount needed to saturate the output
         if (errorIntegral * ki > outputMax)
             errorIntegral = outputMax / ki;

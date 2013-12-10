@@ -136,15 +136,12 @@ const State rampToHitWallTransition[] =
  *****************************************************************************/
 const State getSideCheese[] = 
 {
-    state_setNormalFollowDistance,
-    state_setStopAtMediumDistance,
-    state_wallFollowOut,
     state_openClaw,
     state_clawSideLevel,
     state_setSideFollowDistance,
     state_setStopAtLine,
     state_wallFollowOut,
-    state_setStopAtHalfRampDistance,
+    state_setStopAtMediumDistance,
     state_wallFollowOut,
     state_clawFloorLevel,
     state_setStopAtShortDistance,
@@ -165,10 +162,32 @@ const State sideToSameTransition[] =
 
 const State sideToCenterTransition[] = 
 {
+    state_setNormalFollowDistance,
+    state_setStopAtBump,
+    state_wallFollowOut,
+    state_backUpShortToTurn,
+    state_clawWallLevel,
     state_turnInwards90,
-    state_setStopAtLine,
-    state_forward,
+    state_setNormalFollowDistance,
+    state_wallFollowOut,
+    state_backUpToTurn,
     state_turnInwards90,
+    state_turnInwards90,
+    state_setNormalFollowDistance,
+    state_wallFollowOut,
+    state_backUpToTurn,
+    state_turnOutwards90,
+    state_turnOutwards90,
+    state_setNormalFollowDistance,
+    state_wallFollowOut,
+    state_backUpToTurn,
+    state_turnInwards90,
+    state_turnInwards90,
+    state_setNormalFollowDistance,
+    state_wallFollowOut,
+    state_backUpToTurn,
+    state_turnOutwards90,
+    state_turnOutwards90,
     state_endOfChain
 };
 
@@ -204,4 +223,3 @@ const State sideToHitWallTransition[] =
     state_wallFollowOut,
     state_endOfChain
 };
-

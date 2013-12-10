@@ -8,18 +8,18 @@ class LineSensor
 {
 public:
     LineSensor(int pin);
-	void update();
-	bool detected() { return lineDetected; }
+        void update();
+        bool detected() { return lineDetected; }
     void calibrate(float risingThreshold, float fallingThreshold);
     
 private:
-	static const float lineFilterConstant;
-	
+        static const float lineFilterConstant;
+        
     float lineRisingThreshold;
-	float lineFallingThreshold;
-	int pin;
-	float lineFilter;
-	bool lineDetected;
+        float lineFallingThreshold;
+        int pin;
+        float lineFilter;
+        bool lineDetected;
 };
 
 #endif // LINESENSOR_H

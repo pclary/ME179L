@@ -24,10 +24,10 @@ public:
     {
         return Capacity;
     }
-	void clear() volatile
-	{
-		size_ = 0;
-	}
+        void clear() volatile
+        {
+                size_ = 0;
+        }
 
 private:
     T data[Capacity];

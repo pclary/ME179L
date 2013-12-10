@@ -19,8 +19,8 @@ private:
     float kp;
     float ki;
     float kd;
-	float outputMin;
-	float outputMax;
+        float outputMin;
+        float outputMax;
     
     float derivative(RingBuffer<float, 5>& x);
     float derivativeFilter;
